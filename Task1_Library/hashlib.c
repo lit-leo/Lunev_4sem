@@ -11,10 +11,60 @@
 */
 
 #include <errno.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "hashlib.h"
+
+/*ПЕРЕПИСАТЬ!!! SIZE ПОТЕНЦИАЛЬНО НЕВЕРНО ОПРЕДЕЛЁН*/
+int bitArrayCtor(bitArray_t *this, unsigned int size)
+{
+    if(size <= 0)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
+    this->array = NULL;
+
+    if(size % 4 != 0)
+    {
+        this->array = calloc(size / sizeof(unsigned int) + 1, sizeof(unsigned int));
+        if(this->array == NULL)
+        {
+            errno = ENOMEM;
+            return -1;
+        }
+        this->size = size / sizeof(unsigned int) + 1;
+    }
+    else
+    {
+        this->array = calloc(size / sizeof(unsigned int), sizeof(unsigned int));
+        if(this->array == NULL)
+        {
+            errno = ENOMEM;
+            return -1;
+        }
+        this->size = size / sizeof(unsigned int);
+    }
+
+    return 0;
+}
+
+int bitArrayDtor(bitArray_t *this)
+{
+    this->size = -1;
+    free(this->array);
+
+    return 0;
+}
+
+unsigned int nearest2pwr(unsigned int value)
+{
+    unsigned int i = 1;
+    for(; value > i; i*=2);
+
+    return i;
+}
 
 int hashTableCtor(hashTable_t *this, unsigned int size)
 {
@@ -39,10 +89,21 @@ int hashTableCtor(hashTable_t *this, unsigned int size)
 
     this->capacity = range;
 
-    //security needed!!!!
-    bitArrayCtor(this->inUse, range);
-
+    /*security check needed*/
+    bitArrayCtor(this->bitArray_inUse, range);
     return sizeIsDoubled;
+}
+
+int hashTableDtor(hashTable_t *this)
+{
+    this->used = -1;
+    this->capacity = -1;
+    free(this->table);
+    
+    /*security check needed*/
+    bitArrayDtor(this->bitArray_inUse);
+
+    return 0;
 }
 
 int expand()

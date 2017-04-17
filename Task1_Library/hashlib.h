@@ -37,13 +37,21 @@
 #ifndef HASHLIB_H
 #define HASHLIB_H
 
-typedef unsigned int bitArray_t;
+/*<<<< REMOVE AFTER TESTS>>>>*/
+typedef struct bitArray bitArray_t;
+
+struct bitArray
+{
+    unsigned int* array;
+    unsigned int size;
+};
+/*<<<< REMOVE AFTER TESTS>>>>*/
 
 typedef struct hashTable
 {
     unsigned int capacity;
     unsigned int used;
-    bitArray_t *inUse;
+    bitArray_t *bitArray_inUse;
     char** table;
 } hashTable_t;
 
