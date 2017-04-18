@@ -51,7 +51,7 @@ typedef struct hashTable
 {
     unsigned int capacity;
     unsigned int used;
-    bitArray_t *bitArray_inUse;
+    bitArray_t bitArray_inUse;
     char** table;
 } hashTable_t;
 

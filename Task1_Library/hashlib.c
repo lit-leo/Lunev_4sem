@@ -15,24 +15,22 @@
 #include <stdlib.h>
 #include "hashlib.h"
 
-const static unsigned int align = sizeof(unsigned int) *8;
+const static unsigned int align = sizeof(unsigned int) * 8;
 
-/*ПЕРЕПИСАТЬ!!! SIZE ПОТЕНЦИАЛЬНО НЕВЕРНО ОПРЕДЕЛЁН*/
-int bitArrayCtor(bitArray_t *this, unsigned int size)
+int bitArrayCtor(bitArray_t *this, unsigned int range)
 {
-    if(size <= 0)
+    if(range <= 0)
     {
         errno = EINVAL;
         return -1;
     }
 
-    this->size = size;
-
+    this->size = range;
     this->array = NULL;
 
-    if(size % 4 != 0)
+    if((range % 4) != 0)
     {
-        this->array = calloc(size / sizeof(unsigned int) + 1, sizeof(unsigned int));
+        this->array = (unsigned int*)calloc(range / sizeof(unsigned int) + 1, sizeof(unsigned int));
         if(this->array == NULL)
         {
             errno = ENOMEM;
@@ -41,7 +39,7 @@ int bitArrayCtor(bitArray_t *this, unsigned int size)
     }
     else
     {
-        this->array = calloc(size / sizeof(unsigned int), sizeof(unsigned int));
+        this->array = (unsigned int*)calloc(range / sizeof(unsigned int), sizeof(unsigned int));
         if(this->array == NULL)
         {
             errno = ENOMEM;
@@ -108,20 +106,21 @@ unsigned int nearest2pwr(unsigned int value)
     return i;
 }
 
+/*!!!DEBUG NEEDED. CALLOC CALLS ARE WRONG!!!*/
 int hashTableCtor(hashTable_t *this, unsigned int size)
 {
     int sizeIsDoubled = 1;
     this->used = 0;
     this->table = NULL;
     unsigned int range = nearest2pwr(size * 2);
-    /*превратить size в ближайшую к 2*size степень 2*/
-    this->table = calloc(range, sizeof(char*));
+
+    this->table = (char**)calloc(range, sizeof(char*));
     if (this->table == NULL)
     {
         range /= 2;
         sizeIsDoubled = 0;
 
-        this-> table = calloc(range, sizeof(char*));
+        this-> table = (char**)calloc(range, sizeof(char*));
     }
     if (this->table == NULL)
     {
@@ -130,9 +129,16 @@ int hashTableCtor(hashTable_t *this, unsigned int size)
     }
 
     this->capacity = range;
+    for(int i = 0; i < this->capacity; i++)
+        (this->table)[i] = NULL;
 
-    /*security check needed*/
-    bitArrayCtor(this->bitArray_inUse, range);
+    bitArrayCtor(&(this->bitArray_inUse), this->capacity);
+    if(1/**/ < 0)
+    {
+        errno = ENOMEM;
+        return -1;
+    }
+
     return sizeIsDoubled;
 }
 
@@ -142,10 +148,36 @@ int hashTableDtor(hashTable_t *this)
     this->capacity = -1;
     free(this->table);
     
-    /*security check needed*/
-    bitArrayDtor(this->bitArray_inUse);
+    /*nothing to check*/
+    bitArrayDtor(&(this->bitArray_inUse));
 
     return 0;
+}
+
+unsigned int hashFunc(const char* string, unsigned int probe, unsigned int size)
+{
+    return (hashRot13(string) + probe * hashLY_odd(string)) % size;
+}
+
+int hashTableInsert(hashTable_t *this, char* data)
+{
+    unsigned int probe = 0;
+    unsigned int index = 0;
+    for(; probe < this->capacity; probe++)
+    {
+        index = hashFunc(data, probe, this->capacity);
+        if((this->table)[index] == NULL)
+        {
+            (this->table)[index] = data;
+
+            bitArraySet(&(this->bitArray_inUse), index);
+            
+            return index;
+        }
+    }
+
+    errno = ENOMEM;
+    return -1;
 }
 
 int expand()
