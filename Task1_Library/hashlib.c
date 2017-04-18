@@ -62,7 +62,7 @@ int bitArrayDtor(bitArray_t *this)
 
 int bitArraySet(bitArray_t *this, unsigned int index)
 {
-    if(index < 0)
+    if(index < 0 || index >= this->size)
     {
         errno = EINVAL;
         return -1;
@@ -75,7 +75,7 @@ int bitArraySet(bitArray_t *this, unsigned int index)
 
 int bitArrayClear(bitArray_t *this, unsigned int index)
 {
-    if(index < 0)
+    if(index < 0 || index >= this->size)
     {
         errno = EINVAL;
         return -1;
@@ -88,7 +88,7 @@ int bitArrayClear(bitArray_t *this, unsigned int index)
 
 int bitArrayTest(bitArray_t *this, unsigned int index)
 {
-    if(index < 0)
+    if(index < 0 || index >= this->size)
     {
         errno = EINVAL;
         return -1;
