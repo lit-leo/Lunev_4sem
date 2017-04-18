@@ -15,6 +15,8 @@
 #include <stdlib.h>
 #include "hashlib.h"
 
+const static unsigned int align = sizeof(unsigned int) *8;
+
 /*ПЕРЕПИСАТЬ!!! SIZE ПОТЕНЦИАЛЬНО НЕВЕРНО ОПРЕДЕЛЁН*/
 int bitArrayCtor(bitArray_t *this, unsigned int size)
 {
@@ -23,6 +25,8 @@ int bitArrayCtor(bitArray_t *this, unsigned int size)
         errno = EINVAL;
         return -1;
     }
+
+    this->size = size;
 
     this->array = NULL;
 
@@ -34,7 +38,6 @@ int bitArrayCtor(bitArray_t *this, unsigned int size)
             errno = ENOMEM;
             return -1;
         }
-        this->size = size / sizeof(unsigned int) + 1;
     }
     else
     {
@@ -44,7 +47,6 @@ int bitArrayCtor(bitArray_t *this, unsigned int size)
             errno = ENOMEM;
             return -1;
         }
-        this->size = size / sizeof(unsigned int);
     }
 
     return 0;
@@ -56,6 +58,46 @@ int bitArrayDtor(bitArray_t *this)
     free(this->array);
 
     return 0;
+}
+
+int bitArraySet(bitArray_t *this, unsigned int index)
+{
+    if(index < 0)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
+    (this->array)[index / align] |= (1 << (index % align));
+
+    return 0;
+}
+
+int bitArrayClear(bitArray_t *this, unsigned int index)
+{
+    if(index < 0)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
+    (this->array)[index / align] &= (~(1 << index % align));
+
+    return 0; 
+}
+
+int bitArrayTest(bitArray_t *this, unsigned int index)
+{
+    if(index < 0)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if((this->array[index / align] & (1 << index % align)) != 0)
+        return 1;
+    else
+        return 0;     
 }
 
 unsigned int nearest2pwr(unsigned int value)
