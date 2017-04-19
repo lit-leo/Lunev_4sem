@@ -311,6 +311,11 @@ int hashTableExpand(hashTable_t *this)
     this->capacity *= 2;
     this->table = new_area;
 
+    for (int i = this->capacity / 2; i < this->capacity; ++i) //!!!FIXME
+    {
+        (this->table)[i] = NULL;
+    }
+
     #ifdef DBG_MODE
     fprintf(stderr, "\nInfo was called by %s;", __FUNCTION__);
     fprintf(stderr, "\nAfter expansion");

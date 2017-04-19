@@ -11,7 +11,7 @@ int main(int argc, char** argv)
 
     for (int i = 0; i < atoi(argv[1]); ++i)
     {
-        ex1[i % 32] += (i % 3);
+        ex1[i % 31] += (i % 3);
         hashTableInsert(&test, (char*)ex1);
     }
 
@@ -19,11 +19,11 @@ int main(int argc, char** argv)
 
     for (int i = 0; i < atoi(argv[1]); ++i)
     {
-        ex2[i % 32] += (i % 3);
+        ex2[i % 31] += (i % 3);
         hashTableInsert(&test, (char*)ex2);
     }
 
-    hashTableInfo(&test, stderr);
+    //hashTableInfo(&test, stderr);
 
     hashTableDtor(&test);
 
