@@ -1,4 +1,4 @@
-CFLAGS = -Wall
+CFLAGS = -Wall -g
 COMPILER = gcc
 
 SRC = test.c hashlib.c

@@ -11,7 +11,7 @@
 *       we double the size when it meets 
 *       the threshold of 50%, so we can ensure 
 *       that averagely it takes 2 probes
-*       to insert new string.
+*       to insert a new string.
 *
 *       Table size also has to be a power of 2.      
 *       
@@ -43,7 +43,7 @@ typedef struct bitArray bitArray_t;
 struct bitArray
 {
     unsigned int* array;
-    unsigned int size;
+    unsigned int capacity;
 };
 /*<<<< REMOVE AFTER TESTS>>>>*/
 
@@ -81,7 +81,7 @@ unsigned int hashTableFind(hashTable_t *this, char *data);
 */
 int hashTableDelete(hashTable_t *this, char *data);
 
-/*<<<< REMOVE AFTER TESTS>>>>*/
+/*<<<< REMOVE AFTER TESTS >>>>*/
 unsigned int hashRot13(const char * string);
 
 unsigned int hashLY_odd(const char* string);
