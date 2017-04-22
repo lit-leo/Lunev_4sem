@@ -9,9 +9,9 @@
 *
 *       In order to keep performance rate high,
 *       we double the size when it meets 
-*       the threshold of 50%, so we can ensure 
-*       that averagely it takes 2 probes
-*       to insert a new string.
+*       the threshold of 75%, so we can ensure 
+*       that averagely it takes less than 4 
+*       probes to insert a new string.
 *
 *       Table size also has to be a power of 2.      
 *       
@@ -37,27 +37,19 @@
 #ifndef HASHLIB_H
 #define HASHLIB_H
 
-/*<<<< REMOVE AFTER TESTS>>>>*/
 typedef struct bitArray bitArray_t;
-
-struct bitArray
-{
-    unsigned int* array;
-    unsigned int capacity;
-};
-/*<<<< REMOVE AFTER TESTS>>>>*/
 
 typedef struct hashTable
 {
     unsigned int capacity;
     unsigned int used;
-    bitArray_t bitArray_inUse;
+    bitArray_t *inSequence;
     char** table;
 } hashTable_t;
 
 /****
-* Initilise the table.
-* Adjusts capacity of the table to nearest power of  for 2 * size
+* Initialize the table.
+* Adjusts capacity of the table to nearest power of 2.
 */
 int hashTableCtor(hashTable_t *this, unsigned int size);
 
@@ -73,8 +65,9 @@ int hashTableInsert(hashTable_t *this, char* data);
 
 /****
 * Tries to find element in the table.
+* Returns index to some entry with matching data
 */
-unsigned int hashTableFind(hashTable_t *this, char *data);
+int hashTableFind(hashTable_t *this, char *data);
 
 /****
 * Deletes element from table.

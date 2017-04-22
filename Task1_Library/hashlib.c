@@ -13,11 +13,18 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 #include "hashlib.h"
-//#define DBG_MODE
+#define DBG_MODE
 
 const static unsigned int align = sizeof(unsigned int) * 8;
+
+struct bitArray
+{
+    unsigned int* array;
+    unsigned int capacity;
+};
 
 int hashTableExpand(hashTable_t *this);
 void hashTableInfo(hashTable_t *this, FILE* stream);
@@ -33,24 +40,18 @@ int bitArrayCtor(bitArray_t *this, unsigned int range)
 
     this->capacity = range;
     this->array = NULL;
+    unsigned int calloc_size = 0;
 
     if((range % align) != 0)
-    {
-        this->array = (unsigned int*)calloc(range / align + 1, sizeof(unsigned int));
-        if(this->array == NULL)
-        {
-            errno = ENOMEM;
-            return -1;
-        }
-    }
+        calloc_size = range / align + 1;
     else
+    calloc_size = range / align;
+        
+    this->array = (unsigned int*)calloc(calloc_size, sizeof(unsigned int));
+    if(this->array == NULL)
     {
-        this->array = (unsigned int*)calloc(range / align, sizeof(unsigned int));
-        if(this->array == NULL)
-        {
-            errno = ENOMEM;
-            return -1;
-        }
+        errno = ENOMEM;
+        return -1;
     }
 
     return 0;
@@ -104,6 +105,47 @@ int bitArrayTest(bitArray_t *this, unsigned int index)
         return 0;     
 }
 
+/*!!! Mixture of new_range and *= 2*/
+int bitArrayExpand(bitArray_t *this)
+{
+    unsigned int new_range = this->capacity * 2;
+    
+    /*check new range fits in existing space*/
+    if(new_range <= align)
+    {
+        this->capacity *= 2;
+        return 0;
+    }    
+
+    unsigned int realloc_size = 0;
+    if((new_range % align) != 0)
+        realloc_size = (new_range / align + 1) * sizeof(unsigned int);
+    else
+        realloc_size = new_range / align * sizeof(unsigned int);
+
+    unsigned int *new_area = (unsigned int*)realloc(this->array, realloc_size);
+
+    if(new_area == NULL)
+    {
+        errno = ENOMEM;
+
+        #ifdef DBG_MODE
+        fprintf(stderr, "Not Enough Memory during bitArrayExpand\n");
+        #endif
+
+        return -1;
+    }
+
+    this->array = new_area;
+    this->capacity = new_range;
+    for(int i = this->capacity / 2; i < this->capacity; i++)
+    {
+        bitArrayClear(this, i);
+    }
+
+    return 0;
+}
+
 unsigned int nearest2pwr(unsigned int value)
 {
     unsigned int i = 1;
@@ -117,6 +159,7 @@ int hashTableCtor(hashTable_t *this, unsigned int size)
     int sizeIsDoubled = 1;
     this->used = 0;
     this->table = NULL;
+    this->inSequence = NULL;
     unsigned int range = nearest2pwr(size * 2);
 
     this->table = (char**)calloc(range, sizeof(char*));
@@ -137,12 +180,12 @@ int hashTableCtor(hashTable_t *this, unsigned int size)
     for(int i = 0; i < this->capacity; i++)
         (this->table)[i] = NULL;
 
-    bitArrayCtor(&(this->bitArray_inUse), this->capacity);
-    /*if(1 < 0)
+    this->inSequence = (bitArray_t*)(calloc(1, sizeof(bitArray_t)));
+    if(bitArrayCtor(this->inSequence, this->capacity) < 0)
     {
         errno = ENOMEM;
         return -1;
-    }*/
+    }
 
     #ifdef DBG_MODE
     fprintf(stderr, "\nInfo was called by %s;", __FUNCTION__);
@@ -157,14 +200,14 @@ int hashTableDtor(hashTable_t *this)
     this->used = -1;
     this->capacity = -1;
     free(this->table);
-    
-    /*nothing to check*/
-    bitArrayDtor(&(this->bitArray_inUse));
+
+    bitArrayDtor(this->inSequence);
+    free(this->inSequence);
 
     return 0;
 }
 
-unsigned int hashFunc(const char* string, unsigned int probe, unsigned int size)
+unsigned int hashGetIndex(const char* string, unsigned int probe, unsigned int size)
 {
     return (hashRot13(string) + probe * hashLY_odd(string)) % size;
 }
@@ -184,7 +227,7 @@ int hashTableInsert(hashTable_t *this, char* data)
     #endif
 
     float load_factor = (float)this->used / (float)this->capacity;
-    if(load_factor >= 0.5)
+    if(load_factor >= 0.75)
     {
         #ifdef DBG_MODE
         fprintf(stderr, "load_factor is %g, expansion initiated\n", load_factor);
@@ -196,19 +239,136 @@ int hashTableInsert(hashTable_t *this, char* data)
     unsigned int index = 0;
     for(; probe < this->capacity; probe++)
     {
-        index = hashFunc(data, probe, this->capacity);
+        index = hashGetIndex(data, probe, this->capacity);
         if((this->table)[index] == NULL)
         {
             (this->table)[index] = data;
             (this->used)++;
-            bitArraySet(&(this->bitArray_inUse), index);
+            bitArraySet(this->inSequence, index);
             
             return index;
         }
     }
     /*all probes were unsuccessful*/
-    errno = ENOMEM;
+    errno = ENOMEM;/*????is it correct??*/
     return -1;
+}
+
+/*fails to find old elements after size is doubled*/
+/*because hashGetIndex returns another index sequence*/
+int hashTableFind(hashTable_t *this, char *data)
+{
+    if(data == NULL)
+    {
+        errno = EINVAL;
+        return -2;
+    }
+
+    unsigned int probe = 0;
+    unsigned int index = 0;
+    int data_len = strlen(data);
+    for(; probe < this->capacity; probe++)
+    {
+        index = hashGetIndex(data, probe, this->capacity);
+        /*entry with this index is not a part of any sequence*/
+        if(!bitArrayTest(this->inSequence, index))
+        {
+            return -1;
+        }
+
+        /*enrty with this index has been cleared, moving on*/
+        if((this->table)[index] == NULL)
+            continue;
+
+        int different = 0;
+        if(data_len <= strlen((this->table)[index]))
+            different = strncmp(data, (this->table)[index], data_len);
+        else
+            different = strncmp(data, (this->table)[index], strlen((this->table)[index]));
+
+        if(!different)
+        {   
+            return index;
+        }
+    }
+
+    /*no match found*/
+    return -1;
+}
+
+int hashTableDelete(hashTable_t *this, char *data)
+{
+    int index = hashTableFind(this, data);
+    /*if no element with matching string found*/
+    if(index < 0)
+        return -1;
+
+    (this->table)[index] = NULL;
+    this->used--;
+    return 0;
+}
+
+int hashTableExpand(hashTable_t *this)
+{
+    unsigned int new_size = 2 * this->capacity;
+
+    bitArray_t *new_array = NULL;
+    new_array = (bitArray_t*)calloc(1, sizeof(bitArray_t));
+    if(new_array == NULL)
+    {
+        errno = ENOMEM;
+        return -1;
+    }
+    /*????should I set smth to errno or it'll derrive from Ctor?*/
+    if(bitArrayCtor(new_array, new_size) != 0)
+        return -1;
+
+    char **new_table = (char**)calloc(new_size, sizeof(char*));
+    if(new_table == NULL)
+    {
+        #ifdef DBG_MODE
+        fprintf(stderr, "No expansion happened because of hashTable\n");
+        #endif   
+
+        errno = ENOMEM;
+        return -1;
+    }
+
+    for(int i = 0; i < new_size; i++)
+        new_table[i] = NULL;
+
+    /*fill new_table*/
+    for(int i = 0; i < this->capacity; i++)
+        if(bitArrayTest(this->inSequence, i) && (this->table)[i] != NULL)
+        {
+            /*move string to a new position in new table*/
+            unsigned int index = 0;
+            for(unsigned int probe = 0; probe < new_size; probe++)
+            {
+                index = hashGetIndex((this->table)[i], probe, new_size);
+                if(new_table[index] == NULL)
+                {
+                    new_table[index] = (this->table)[i];
+                    bitArraySet(new_array, index);
+                    break;
+                }
+            }
+            /*???? should i check, that string is really moved?*/
+        }
+
+    bitArrayDtor(this->inSequence);
+    this->inSequence = new_array;
+    this->capacity = new_size;
+    free(this->table);
+    this->table = new_table;
+
+    #ifdef DBG_MODE
+    fprintf(stderr, "\nInfo was called by %s;", __FUNCTION__);
+    fprintf(stderr, "\nAfter expansion");
+    hashTableInfo(this, stderr);
+    #endif
+
+    return 0;
 }
 
 void hashTableInfo(hashTable_t *this, FILE* stream)
@@ -218,17 +378,16 @@ void hashTableInfo(hashTable_t *this, FILE* stream)
     fprintf(stream, "hashTable capacity: %u\n", this->capacity);
     fprintf(stream, "hashTable used: %u\n", this->used);
     fprintf(stream, "hashTable load_factor: %g\n", (float)this->used / (float)this->capacity);
-    fprintf(stream, "bitArray capacity: %u\n", this->bitArray_inUse.capacity);
+    fprintf(stream, "bitArray capacity: %u\n", this->inSequence->capacity);
     fprintf(stream, "bitArray structure:\n");
-    for(int i = 0; i < this->bitArray_inUse.capacity; i++)
-        fprintf(stream, "%u", bitArrayTest(&(this->bitArray_inUse), i));
+    for(int i = 0; i < this->inSequence->capacity; i++)
+        fprintf(stream, "%u", bitArrayTest(this->inSequence, i));
     fprintf(stream, "\n");
     fprintf(stream, "hashTable structure:\n");
-    for (int i = 0; i < this->capacity; i++)
-        if(bitArrayTest(&(this->bitArray_inUse), i) && (this->table)[i] != NULL)
+    for(int i = 0; i < this->capacity; i++)
+        if(bitArrayTest(this->inSequence, i) && (this->table)[i] != NULL)
             fprintf(stream, "table[%d] = %s\n", i, (this->table)[i]);
-    fprintf(stream, "--------------------------------\n");
-   
+    fprintf(stream, "--------------------------------\n");   
 }
 
 int hashTableVerify(hashTable_t *this)
@@ -237,92 +396,11 @@ int hashTableVerify(hashTable_t *this)
     (this->table == NULL) ||
     (this->capacity <= 0) ||
     (this->used < 0)      ||
-    (this->bitArray_inUse.capacity <= 0))
+    (this->inSequence->capacity <= 0) ||
+    (this->inSequence->capacity != this->capacity))
         return 0;
     else
         return 1;
-}
-
-/*!!! Mixture of new_range and *= 2*/
-int bitArrayExpand(bitArray_t *this)
-{
-    unsigned int new_range = this->capacity * 2;
-    
-    /*check new range fits in existing space*/
-    if(new_range <= align)
-    {
-        this->capacity *= 2;
-        return 0;
-    }    
-
-    unsigned int realloc_size = 0;
-    if((new_range % align) != 0)
-        realloc_size = (new_range / align + 1) * sizeof(unsigned int);
-
-    else
-        realloc_size = new_range / align * sizeof(unsigned int);
-
-    unsigned int *new_area = (unsigned int*)realloc(this->array, realloc_size);
-
-    if(new_area == NULL)
-    {
-        errno = ENOMEM;
-
-        #ifdef DBG_MODE
-        fprintf(stderr, "Not Enough Memory during bitArrayExpand\n");
-        #endif
-
-        return -1;
-    }
-
-    this->array = new_area;
-    this->capacity *= 2;
-
-    return 0;
-}
-
-int hashTableExpand(hashTable_t *this)
-{
-    if(bitArrayExpand(&(this->bitArray_inUse)) != 0)
-    {
-        errno = ENOMEM;
-
-        #ifdef DBG_MODE
-        fprintf(stderr, "No expansion happened because of bitArray\n");
-        #endif  
-
-        return -1;
-    }
-
-    unsigned int new_size = 2 * this->capacity * sizeof(char*);
-    char **new_area = (char**)realloc(this->table, new_size);
-
-    if(new_area == NULL)
-    {
-        errno = ENOMEM;
-
-        #ifdef DBG_MODE
-        fprintf(stderr, "No expansion happened because of hashTable\n");
-        #endif   
-
-        return -1;
-    }
-
-    this->capacity *= 2;
-    this->table = new_area;
-
-    for (int i = this->capacity / 2; i < this->capacity; ++i) //!!!FIXME
-    {
-        (this->table)[i] = NULL;
-    }
-
-    #ifdef DBG_MODE
-    fprintf(stderr, "\nInfo was called by %s;", __FUNCTION__);
-    fprintf(stderr, "\nAfter expansion");
-    hashTableInfo(this, stderr);
-    #endif
-
-    return 0;
 }
 
 unsigned int hashRot13(const char * string)
