@@ -78,19 +78,6 @@ int bitArraySet(bitArray_t *this, unsigned int index)
     return 0;
 }
 
-int bitArrayClear(bitArray_t *this, unsigned int index)
-{
-    if(index < 0 || index >= this->capacity)
-    {
-        errno = EINVAL;
-        return -1;
-    }
-
-    (this->array)[index / align] &= (~(1 << index % align));
-
-    return 0; 
-}
-
 int bitArrayTest(bitArray_t *this, unsigned int index)
 {
     if(index < 0 || index >= this->capacity)
@@ -103,47 +90,6 @@ int bitArrayTest(bitArray_t *this, unsigned int index)
         return 1;
     else
         return 0;     
-}
-
-/*!!! Mixture of new_range and *= 2*/
-int bitArrayExpand(bitArray_t *this)
-{
-    unsigned int new_range = this->capacity * 2;
-    
-    /*check new range fits in existing space*/
-    if(new_range <= align)
-    {
-        this->capacity *= 2;
-        return 0;
-    }    
-
-    unsigned int realloc_size = 0;
-    if((new_range % align) != 0)
-        realloc_size = (new_range / align + 1) * sizeof(unsigned int);
-    else
-        realloc_size = new_range / align * sizeof(unsigned int);
-
-    unsigned int *new_area = (unsigned int*)realloc(this->array, realloc_size);
-
-    if(new_area == NULL)
-    {
-        errno = ENOMEM;
-
-        #ifdef DBG_MODE
-        fprintf(stderr, "Not Enough Memory during bitArrayExpand\n");
-        #endif
-
-        return -1;
-    }
-
-    this->array = new_area;
-    this->capacity = new_range;
-    for(int i = this->capacity / 2; i < this->capacity; i++)
-    {
-        bitArrayClear(this, i);
-    }
-
-    return 0;
 }
 
 unsigned int nearest2pwr(unsigned int value)
@@ -270,14 +216,14 @@ int hashTableFind(hashTable_t *this, char *data)
     for(; probe < this->capacity; probe++)
     {
         index = hashGetIndex(data, probe, this->capacity);
-        /*entry with this index is not a part of any sequence*/
         if(!bitArrayTest(this->inSequence, index))
         {
+        /*entry with this index is not a part of any sequence*/
             return -1;
         }
 
-        /*enrty with this index has been cleared, moving on*/
         if((this->table)[index] == NULL)
+        /*enrty with this index has been cleared, moving on*/
             continue;
 
         int different = 0;
@@ -357,6 +303,7 @@ int hashTableExpand(hashTable_t *this)
         }
 
     bitArrayDtor(this->inSequence);
+    free(this->inSequence);
     this->inSequence = new_array;
     this->capacity = new_size;
     free(this->table);
@@ -378,6 +325,7 @@ void hashTableInfo(hashTable_t *this, FILE* stream)
     fprintf(stream, "hashTable capacity: %u\n", this->capacity);
     fprintf(stream, "hashTable used: %u\n", this->used);
     fprintf(stream, "hashTable load_factor: %g\n", (float)this->used / (float)this->capacity);
+    fprintf(stream, "bitArray: %p\n", this->inSequence);    
     fprintf(stream, "bitArray capacity: %u\n", this->inSequence->capacity);
     fprintf(stream, "bitArray structure:\n");
     for(int i = 0; i < this->inSequence->capacity; i++)
@@ -413,32 +361,6 @@ unsigned int hashRot13(const char * string)
         hash += (unsigned char)(*string);
         hash -= (hash << 13) | (hash >> 19);
     }
-
-    return hash;
-
-}
-
-unsigned int hashRot13_odd(const char * string)
-{
-
-    unsigned int hash = 0;
-
-    for(; *string; string++)
-    {
-        hash += (unsigned char)(*string);
-        hash -= (hash << 13) | (hash >> 19);
-    }
-
-    return hash | 1;
-
-}
-
-unsigned int hashLY(const char* string)
-{
-    unsigned int hash = 0;
-
-    for(; *string; string++)
-        hash = (hash * 1664525) + (unsigned char)(*string) + 1013904223;
 
     return hash;
 

@@ -4,19 +4,36 @@
 
 int main(int argc, char** argv)
 {
-    char example[32] = "Hi, It's me, Mario!";
+    char test_strings[14][64];
+    char findExample[64] = "And what was once his bliss appears his bane.";
+    FILE *filein = fopen("stringsForTests.txt", "r");
+    
+    if(filein == NULL)
+    {
+        perror("Input file");
+        exit(2);
+    }
+
+    for (int i = 0; i < 14; ++i)
+    {
+        fgets(test_strings[i], 64, filein);
+    }
+/******************************************************************************/
+
     hashTable_t test;
     hashTableCtor(&test, 1);
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < 14; ++i)
     {
-        hashTableInsert(&test, (char*)example);
+        hashTableInsert(&test, test_strings[i]);
     }
     hashTableInfo(&test, stdout);
-    for (int i = 0; i < 3; ++i)
+    printf("%d\n", hashTableFind(&test, (char*)findExample));
+    for (int i = 0; i < 14; ++i)
     {
-        hashTableDelete(&test, (char*)example);
+        hashTableDelete(&test, test_strings[i]);
     }
     hashTableInfo(&test, stdout);
     hashTableDtor(&test);
+
     return 0;
 }
