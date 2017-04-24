@@ -17,15 +17,7 @@
 //#include <assert.h>
 #include "hashlib.h"
 #include "bitarraylib.h"
-#define ReturnEINVAL(code) EINVAL errno = EINVAL;\
-                    return code;
 //#define DBG_MODE
-
-int hashTableExpand(hashTable_t *this);
-void hashTableInfo(hashTable_t *this, FILE* stream);
-int hashTableVerify(hashTable_t *this);
-unsigned int hashRot13(const char * string);
-unsigned int hashLY_odd(const char* string);
 
 unsigned int nearest2pwr(unsigned int value)
 {
@@ -34,6 +26,105 @@ unsigned int nearest2pwr(unsigned int value)
 
     return i;
 }
+
+struct hashTableIterator
+{
+    hashTable_t *hashTable;
+    int currentIndex;
+};
+
+int hashTableIteratorCtor(hashTableIterator_t *this, hashTable_t *from)
+{
+    if(this == NULL || from == NULL)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
+    this->hashTable = from;
+    this->currentIndex = -1;
+
+    return 0;
+}
+
+char *hashTableIteratorFirst(hashTableIterator_t *this)
+{
+    if(this == NULL || this->hashTable == NULL)
+    {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    for (int i = 0; i < this->hashTable->inSequence->capacity; ++i)
+        if(bitArrayTest(this->hashTable->inSequence, i) &&
+          (this->hashTable->table)[i] != NULL)
+            {
+                this->currentIndex = i;
+                return (this->hashTable->table)[i];
+            }
+
+    /*Nothing found*/
+    return NULL;
+}
+
+char *hashTableIteratorNext(hashTableIterator_t *this)
+{
+    if(this == NULL || this->hashTable == NULL)
+    {
+        errno = EINVAL;
+        return NULL ;
+    }
+
+    for (int i = 0; this->currentIndex < this->hashTable->inSequence->capacity; ++i)
+        if(bitArrayTest(this->hashTable->inSequence, i) &&
+          (this->hashTable->table)[i] != NULL)
+            {
+                this->currentIndex = i;
+                return (this->hashTable->table)[i];
+            }
+
+    /*Nothing found*/
+    return NULL;
+}
+
+int hashTableIteratorIsLast(hashTableIterator_t *this)
+{
+    if(this == NULL || this->hashTable == NULL)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
+    for (int i = 0; this->currentIndex < this->hashTable->inSequence->capacity; ++i)
+        if(bitArrayTest(this->hashTable->inSequence, i) &&
+          (this->hashTable->table)[i] != NULL)
+            {
+                return 0;
+            }
+
+    /*No more elements met*/
+    return 1;
+}
+
+char *hashTableIteratorGet(hashTableIterator_t *this)
+{
+    if(this == NULL || this->hashTable == NULL ||
+       this->currentIndex < 0)
+    {   
+        errno = EINVAL;
+        return NULL;
+    }
+
+    return (this->hashTable->table)[this->currentIndex];
+        
+}
+
+int hashTableExpand(hashTable_t *this);
+void hashTableInfo(hashTable_t *this, FILE* stream);
+int hashTableVerify(hashTable_t *this);
+unsigned int hashRot13(const char * string);
+unsigned int hashLY_odd(const char* string);
+
 
 int hashTableCtor(hashTable_t *this, unsigned int size)
 {
@@ -44,7 +135,6 @@ int hashTableCtor(hashTable_t *this, unsigned int size)
         return -1;
     }
 
-    int sizeIsDoubled = 1;
     this->used = 0;
     this->table = NULL;
     this->inSequence = NULL;
@@ -72,7 +162,7 @@ int hashTableCtor(hashTable_t *this, unsigned int size)
     hashTableInfo(this, stderr);
     #endif
 
-    return sizeIsDoubled;
+    return 0;
 }
 
 int hashTableDtor(hashTable_t *this)
@@ -103,7 +193,7 @@ int hashTableInsert(hashTable_t *this, char* data)
     if(!hashTableVerify(this) || data == NULL)
     {
         errno = EINVAL;
-        return -1;
+        return -2;
     }
 
     #ifdef DBG_MODE
@@ -183,7 +273,7 @@ int hashTableDelete(hashTable_t *this, char *data)
     if(!hashTableVerify(this) || data == NULL)
     {
         errno = EINVAL;
-        return -1;
+        return -2;
     }
 
     int index = hashTableFind(this, data);
