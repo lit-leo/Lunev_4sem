@@ -36,6 +36,7 @@
 
 #ifndef HASHLIB_H
 #define HASHLIB_H
+#define DBG_HASH_FUNCTIONS
 
 typedef struct bitArray bitArray_t;
 
@@ -73,10 +74,4 @@ int hashTableFind(hashTable_t *this, char *data);
 * Deletes element from table.
 */
 int hashTableDelete(hashTable_t *this, char *data);
-
-/*<<<< REMOVE AFTER TESTS >>>>*/
-unsigned int hashRot13(const char * string);
-
-unsigned int hashLY_odd(const char* string);
-/*<<<<<<<<<<<<<<>>>>>>>>>>>>>>*/
 #endif

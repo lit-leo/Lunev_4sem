@@ -14,83 +14,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
+//#include <assert.h>
 #include "hashlib.h"
-#define DBG_MODE
-
-const static unsigned int align = sizeof(unsigned int) * 8;
-
-struct bitArray
-{
-    unsigned int* array;
-    unsigned int capacity;
-};
+#include "bitarraylib.h"
+#define ReturnEINVAL(code) EINVAL errno = EINVAL;\
+                    return code;
+//#define DBG_MODE
 
 int hashTableExpand(hashTable_t *this);
 void hashTableInfo(hashTable_t *this, FILE* stream);
 int hashTableVerify(hashTable_t *this);
-
-int bitArrayCtor(bitArray_t *this, unsigned int range)
-{
-    if(range <= 0)
-    {
-        errno = EINVAL;
-        return -1;
-    }
-
-    this->capacity = range;
-    this->array = NULL;
-    unsigned int calloc_size = 0;
-
-    if((range % align) != 0)
-        calloc_size = range / align + 1;
-    else
-    calloc_size = range / align;
-        
-    this->array = (unsigned int*)calloc(calloc_size, sizeof(unsigned int));
-    if(this->array == NULL)
-    {
-        errno = ENOMEM;
-        return -1;
-    }
-
-    return 0;
-}
-
-int bitArrayDtor(bitArray_t *this)
-{
-    this->capacity = -1;
-    free(this->array);
-
-    return 0;
-}
-
-int bitArraySet(bitArray_t *this, unsigned int index)
-{
-    if(index < 0 || index >= this->capacity)
-    {
-        errno = EINVAL;
-        return -1;
-    }
-
-    (this->array)[index / align] |= (1 << (index % align));
-
-    return 0;
-}
-
-int bitArrayTest(bitArray_t *this, unsigned int index)
-{
-    if(index < 0 || index >= this->capacity)
-    {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if((this->array[index / align] & (1 << index % align)) != 0)
-        return 1;
-    else
-        return 0;     
-}
+unsigned int hashRot13(const char * string);
+unsigned int hashLY_odd(const char* string);
 
 unsigned int nearest2pwr(unsigned int value)
 {
@@ -102,20 +37,20 @@ unsigned int nearest2pwr(unsigned int value)
 
 int hashTableCtor(hashTable_t *this, unsigned int size)
 {
+    /*second check is to ensure that size is positive*/
+    if(this == NULL || (int)size <= 0)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
     int sizeIsDoubled = 1;
     this->used = 0;
     this->table = NULL;
     this->inSequence = NULL;
-    unsigned int range = nearest2pwr(size * 2);
+    unsigned int range = nearest2pwr(size);
 
     this->table = (char**)calloc(range, sizeof(char*));
-    if (this->table == NULL)
-    {
-        range /= 2;
-        sizeIsDoubled = 0;
-
-        this-> table = (char**)calloc(range, sizeof(char*));
-    }
     if (this->table == NULL)
     {
         errno = ENOMEM;
@@ -129,7 +64,6 @@ int hashTableCtor(hashTable_t *this, unsigned int size)
     this->inSequence = (bitArray_t*)(calloc(1, sizeof(bitArray_t)));
     if(bitArrayCtor(this->inSequence, this->capacity) < 0)
     {
-        errno = ENOMEM;
         return -1;
     }
 
@@ -143,6 +77,12 @@ int hashTableCtor(hashTable_t *this, unsigned int size)
 
 int hashTableDtor(hashTable_t *this)
 {
+    if(this == NULL)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
     this->used = -1;
     this->capacity = -1;
     free(this->table);
@@ -160,7 +100,7 @@ unsigned int hashGetIndex(const char* string, unsigned int probe, unsigned int s
 
 int hashTableInsert(hashTable_t *this, char* data)
 {
-    if(data == NULL)
+    if(!hashTableVerify(this) || data == NULL)
     {
         errno = EINVAL;
         return -1;
@@ -196,24 +136,20 @@ int hashTableInsert(hashTable_t *this, char* data)
         }
     }
     /*all probes were unsuccessful*/
-    errno = ENOMEM;/*????is it correct??*/
     return -1;
 }
 
-/*fails to find old elements after size is doubled*/
-/*because hashGetIndex returns another index sequence*/
 int hashTableFind(hashTable_t *this, char *data)
 {
-    if(data == NULL)
+    if(!hashTableVerify(this) || data == NULL)
     {
         errno = EINVAL;
         return -2;
     }
 
-    unsigned int probe = 0;
     unsigned int index = 0;
     int data_len = strlen(data);
-    for(; probe < this->capacity; probe++)
+    for(unsigned int probe = 0; probe < this->capacity; probe++)
     {
         index = hashGetIndex(data, probe, this->capacity);
         if(!bitArrayTest(this->inSequence, index))
@@ -244,6 +180,12 @@ int hashTableFind(hashTable_t *this, char *data)
 
 int hashTableDelete(hashTable_t *this, char *data)
 {
+    if(!hashTableVerify(this) || data == NULL)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
     int index = hashTableFind(this, data);
     /*if no element with matching string found*/
     if(index < 0)
@@ -256,6 +198,12 @@ int hashTableDelete(hashTable_t *this, char *data)
 
 int hashTableExpand(hashTable_t *this)
 {
+    if(!hashTableVerify(this))
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
     unsigned int new_size = 2 * this->capacity;
 
     bitArray_t *new_array = NULL;
@@ -265,7 +213,7 @@ int hashTableExpand(hashTable_t *this)
         errno = ENOMEM;
         return -1;
     }
-    /*????should I set smth to errno or it'll derrive from Ctor?*/
+
     if(bitArrayCtor(new_array, new_size) != 0)
         return -1;
 
@@ -320,7 +268,11 @@ int hashTableExpand(hashTable_t *this)
 
 void hashTableInfo(hashTable_t *this, FILE* stream)
 {
-    assert(hashTableVerify(this));
+    if(!hashTableVerify(this))
+    {
+        fprintf(stream, "\n-----hashTableInfo ERROR -----\n");
+        return;
+    }
     fprintf(stream, "\n-----hashTableInfo of %p -----\n", this);
     fprintf(stream, "hashTable capacity: %u\n", this->capacity);
     fprintf(stream, "hashTable used: %u\n", this->used);
@@ -344,8 +296,8 @@ int hashTableVerify(hashTable_t *this)
     (this->table == NULL) ||
     (this->capacity <= 0) ||
     (this->used < 0)      ||
-    (this->inSequence->capacity <= 0) ||
-    (this->inSequence->capacity != this->capacity))
+    (this->inSequence == NULL) ||
+    (this->inSequence->capacity <= 0))
         return 0;
     else
         return 1;
