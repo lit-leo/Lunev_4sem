@@ -14,7 +14,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <assert.h>
 #include "hashlib.h"
 #include "bitarraylib.h"
 //#define DBG_MODE
@@ -120,7 +119,9 @@ char *hashTableIteratorGet(hashTableIterator_t *this)
 }
 
 int hashTableExpand(hashTable_t *this);
+#ifdef DBG_MODE
 void hashTableInfo(hashTable_t *this, FILE* stream);
+#endif
 int hashTableVerify(hashTable_t *this);
 unsigned int hashRot13(const char * string);
 unsigned int hashLY_odd(const char* string);
@@ -153,9 +154,7 @@ int hashTableCtor(hashTable_t *this, unsigned int size)
 
     this->inSequence = (bitArray_t*)(calloc(1, sizeof(bitArray_t)));
     if(bitArrayCtor(this->inSequence, this->capacity) < 0)
-    {
         return -1;
-    }
 
     #ifdef DBG_MODE
     fprintf(stderr, "\nInfo was called by %s;", __FUNCTION__);
@@ -252,16 +251,12 @@ int hashTableFind(hashTable_t *this, char *data)
         /*enrty with this index has been cleared, moving on*/
             continue;
 
-        int different = 0;
-        if(data_len <= strlen((this->table)[index]))
-            different = strncmp(data, (this->table)[index], data_len);
-        else
-            different = strncmp(data, (this->table)[index], strlen((this->table)[index]));
+        /*lengths don't match*/
+        if(data_len != strlen((this->table)[index]))
+            continue;
 
-        if(!different)
-        {   
+        if(!strncmp(data, (this->table)[index], data_len))
             return index;
-        }
     }
 
     /*no match found*/
@@ -288,11 +283,14 @@ int hashTableDelete(hashTable_t *this, char *data)
 
 int hashTableExpand(hashTable_t *this)
 {
-    if(!hashTableVerify(this))
+    /*this function is called only from hashTableInsert
+    *hashTableInsert already checks the validity*/
+    /*???? This check is not neccecary?*/
+    /*if(!hashTableVerify(this))
     {
         errno = EINVAL;
         return -1;
-    }
+    }*/
 
     unsigned int new_size = 2 * this->capacity;
 
@@ -356,6 +354,7 @@ int hashTableExpand(hashTable_t *this)
     return 0;
 }
 
+#ifdef DBG_MODE
 void hashTableInfo(hashTable_t *this, FILE* stream)
 {
     if(!hashTableVerify(this))
@@ -379,6 +378,7 @@ void hashTableInfo(hashTable_t *this, FILE* stream)
             fprintf(stream, "table[%d] = %s\n", i, (this->table)[i]);
     fprintf(stream, "--------------------------------\n");   
 }
+#endif
 
 int hashTableVerify(hashTable_t *this)
 {

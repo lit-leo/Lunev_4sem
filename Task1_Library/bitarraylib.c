@@ -35,12 +35,17 @@ int bitArrayCtor(bitArray_t *this, unsigned int range)
 
 int bitArrayDtor(bitArray_t *this)
 {
-    if(this != NULL)
-        this->capacity = -1;
-
+    if(this == NULL)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+        
+    this->capacity = -1;
     free(this->array);
 
     return 0;
+    
 }
 
 int bitArraySet(bitArray_t *this, unsigned int index)

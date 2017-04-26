@@ -1,4 +1,5 @@
 #include "hashlib.h"
+#include "bitarraylib.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -27,8 +28,21 @@
             printf("[" RED "FAILED" RESET"] "#func" \n");\
     } while(0)
 
+#define SETMEMLIM(value)\
+    struct rlimit rlim_old;\
+    struct rlimit rlim;\
+    getrlimit(RLIMIT_AS, &rlim_old);\
+    rlim.rlim_cur = value;\
+    rlim.rlim_max = rlim_old.rlim_max;\
+    setrlimit(RLIMIT_AS, &rlim)
+    //printf("SETMEMLIMIT %d\n", setrlimit(RLIMIT_AS, &rlim))
+
+#define RESTOREMEMLIM()\
+        setrlimit(RLIMIT_AS, &rlim_old)
+
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <unistd.h>
 
 int commonTest();
 int nullComponentsTest();
@@ -48,17 +62,10 @@ int testHashTableCtor()
     CHECK_RETV(retv, 0);
     hashTableDtor(&test);
 
-    struct rlimit rlim_old;
-    struct rlimit rlim;
-    rlim.rlim_cur = 1;
-    //rlim.rlim_max = rlim_old.rlim_max;
-    getrlimit(RLIMIT_AS, &rlim_old);
-    setrlimit(RLIMIT_AS, &rlim);
-
-    retv = hashTableCtor(&test, 20480000);
+    SETMEMLIM(1024 * 1024);
+    retv = hashTableCtor(&test, 65536/*8193*/);
     CHECK_RETV_ERRNO(retv, -1, ENOMEM);
-
-    setrlimit(RLIMIT_AS, &rlim_old);
+    RESTOREMEMLIM();
 
     return 1;
 }
@@ -99,6 +106,38 @@ int testHashTableInsert()
 }
 int testHashTableExpand()
 {
+    char dummy[32] = "THIS IS DUMMY TO TEST EXPANSION";
+    hashTable_t test;
+    int retv =  hashTableCtor(&test, 16);
+    CHECK_RETV(retv, 0);
+    
+    /*successful expansion*/
+    /*forcing to intitiate expansion during next insertion*/
+    test.used = 12;
+    retv = hashTableInsert(&test, (char*)dummy);
+    if(retv < 0 || test.capacity != 32 ||
+        (test.inSequence)->capacity != 32)
+        return 0;
+
+    retv = hashTableDtor(&test);
+    CHECK_RETV(retv, 0);
+
+    /*unsuccsessful expansion*/
+    SETMEMLIM(5 * 1024 * 1024);
+    retv = hashTableCtor(&test, 65536);
+    CHECK_RETV(retv, 0);
+
+    /*forcing to intitiate expansion during next insertion*/
+    test.used = 49153;
+    retv = hashTableInsert(&test, (char*)dummy);
+    if(retv < 0 || test.capacity != 65536 ||
+        (test.inSequence)->capacity != 65536)
+        return 0;
+    RESTOREMEMLIM();
+
+    retv = hashTableDtor(&test);
+    CHECK_RETV(retv, 0);
+
     return 1;
 }
 int testHashTableFind()
@@ -111,14 +150,75 @@ int testHashTableFind()
     CHECK_RETV(retv, 0);
 
     char ex1[32] = "THIS IS FIRST EXAMPLE";
-    char ex2[32] = "THIS IS SECOND EXAMPLE";
-    retv = hashTableInsert(&test, (char*)ex1);
-    if(retv < 0)
+    char ex2[32] = "SECOND EXAMPLE";
+    char ex3[32] = "Example to not to be found";
+
+    if(hashTableFind(&test, (char*)ex1) >= 0)
         return 0;
+
+    int index = hashTableInsert(&test, (char*)ex1);
+    if(index < 0)
+        return 0;
+    if(hashTableFind(&test, (char*)ex1) != index)
+        return 0;
+    /*force to not ot expand to get full table*/
+    test.used = 0;
+
+    index = hashTableInsert(&test, (char*)ex2);
+    if(index < 0)
+        return 0;
+    if(hashTableFind(&test, (char*)ex2) != index)
+        return 0;
+    /*force to not to expand to get full table*/
+    test.used = 0;
+
+    retv = hashTableFind(&test, (char*)ex3);
+    CHECK_RETV(retv, -1);
+    /*restore normal test.used value*/
+    test.used = 2;
+
+    retv = hashTableDelete(&test, (char*)ex1);
+    CHECK_RETV(retv, 0);
+    if(hashTableFind(&test, (char*)ex1) != -1)
+        return 0;
+
+    /*force table to exapand and rehash*/
+    for (int i = 0; i < 32; ++i)
+    {
+        retv = hashTableInsert(&test, (char*)ex1);
+        if(retv < 0)
+            return 0;
+    }
+    if(hashTableFind(&test, (char*)ex2) < 0 ||
+        hashTableFind(&test, (char*)ex1) < 0)
+        return 0;
+
+    return 1;
 
 
 }
-int testHashTableDelete();
+
+int testHashTableDelete()
+{
+    int retv = hashTableDelete(NULL, NULL);
+    CHECK_RETV_ERRNO(retv, -2, EINVAL);
+
+    hashTable_t table;
+    retv = hashTableCtor(&table, 16);
+    CHECK_RETV(retv, 0);
+
+    char ex[32] = "Example.";
+    retv = hashTableDelete(&table, (char*)ex);
+    CHECK_RETV(retv, -1);
+
+    int index = hashTableInsert(&table, (char*)ex);
+    if(index < 0)
+        return 0;
+    retv = hashTableDelete(&table, (char*)ex);
+    CHECK_RETV(retv, 0);
+
+    return 1;
+}
 int testHashTableIteratorCtor();
 int testHashTableIteratorFirst();
 int testHashTableIteratorNext();
@@ -130,10 +230,10 @@ int main(int argc, char** argv)
     PRTEST(testHashTableCtor());
     PRTEST(testHashTableDtor());
     PRTEST(testHashTableInsert());
-    /*PRTEST(testHashTableExpand());
+    PRTEST(testHashTableExpand());
     PRTEST(testHashTableFind());
     PRTEST(testHashTableDelete());
-    PRTEST(testHashTableIteratorCtor());
+    /*PRTEST(testHashTableIteratorCtor());
     PRTEST(testHashTableIteratorFirst());
     PRTEST(testHashTableIteratorNext());
     PRTEST(testHashTableIteratorIsLast());
@@ -161,7 +261,7 @@ int main(int argc, char** argv)
         fgets(test_strings[i], 64, filein);
     }
 
-    /*hashTable_t test;
+    hashTable_t test;
     hashTableCtor(&test, 4);
     for (int i = 0; i < 14; ++i)
     {
@@ -189,12 +289,12 @@ int main(int argc, char** argv)
     hashTable_t test_table;
     char example[32] = "test";
 
-    /*hashTableCtor(NULL, 1);
+    hashTableCtor(NULL, 1);
     hashTableCtor(&test_table, -1);
     hashTableCtor(&test_table, 1024 * 16);
     hashTableInfo(&test_table, stderr);
 
-    /*hashTableInsert(NULL, NULL);
+    hashTableInsert(NULL, NULL);
     hashTableInsert(&test_table, NULL);
     hashTableInsert(NULL, (char *)example);
 
