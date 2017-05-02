@@ -15,4 +15,6 @@ int bitArraySet(bitArray_t *this, unsigned int index);
 
 int bitArrayTest(bitArray_t *this, unsigned int index);
 
+int bitArrayClear(bitArray_t *this, unsigned int index);
+
 #endif

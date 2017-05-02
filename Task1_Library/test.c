@@ -44,9 +44,19 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
-int commonTest();
-int nullComponentsTest();
+struct hashTableIterator
+{
+    hashTable_t *hashTable;
+    int currentIndex;
+};
 
+struct hashTable
+{
+    unsigned int capacity;
+    unsigned int used;
+    bitArray_t *inSequence;
+    char** table;
+};
 
 /*!!!! mem_limits are not working!*/
 int testHashTableCtor()
@@ -194,8 +204,6 @@ int testHashTableFind()
         return 0;
 
     return 1;
-
-
 }
 
 int testHashTableDelete()
@@ -217,13 +225,254 @@ int testHashTableDelete()
     retv = hashTableDelete(&table, (char*)ex);
     CHECK_RETV(retv, 0);
 
+    char ex0[48] = "In mind a slave to every vicious joy;";
+    for (int i = 0; i < 10; ++i)
+    {
+        int index = hashTableInsert(&table, (char*)ex0);
+        if(index < 0)
+            return 0;
+    }
+
+    for (int i = 0; i < 10; ++i)
+    {
+        int retv = hashTableDelete(&table, (char*)ex0);
+        CHECK_RETV(retv, 0);
+    }
+    /*check that inSequence is clear when the table is clear*/
+    for (int i = 0; i < table.inSequence->capacity; ++i)
+    {
+        if(bitArrayTest(table.inSequence, i))
+            return 0;
+    }
+
     return 1;
 }
-int testHashTableIteratorCtor();
-int testHashTableIteratorFirst();
-int testHashTableIteratorNext();
-int testHashTableIteratorIsLast();
-int testHashTableIteratorGet();
+int testHashTableIteratorCtor()
+{
+    hashTableIterator_t tableIterator;
+    int retv = hashTableIteratorCtor(NULL, NULL);
+    CHECK_RETV_ERRNO(retv, -1, EINVAL);
+
+    retv = hashTableIteratorCtor(&tableIterator, NULL);
+    CHECK_RETV_ERRNO(retv, -1, EINVAL);    
+    
+    hashTable_t table;
+    retv = hashTableCtor(&table, 16);
+    CHECK_RETV(retv, 0);
+
+    retv = hashTableIteratorCtor(&tableIterator, &table);
+    if(retv != 0 ||
+        tableIterator.hashTable != &table ||
+        tableIterator.currentIndex != -1)
+        return 0;
+
+    return 1;
+}
+int testHashTableIteratorFirst()
+{
+    char *retp = hashTableIteratorFirst(NULL);
+    CHECK_RETV_ERRNO(retp, NULL, EINVAL);
+
+    hashTable_t table;
+    int retv = hashTableCtor(&table, 16);
+    CHECK_RETV(retv, 0);
+
+    hashTableIterator_t tableIterator;
+    retv = hashTableIteratorCtor(&tableIterator, &table);
+    CHECK_RETV(retv, 0);
+
+    retp = hashTableIteratorFirst(&tableIterator);
+    CHECK_RETV(retp, NULL);
+
+    char ex8[48] = "In law an infant, and in years a boy,";
+    char ex0[48] = "In mind a slave to every vicious joy;";
+    char ex13[48] = "From every sense of shame and virtue wean'd,";
+    char ex11[48] = "In lies an adept, in deceit a fiend;";
+    retv = hashTableInsert(&table, (char*)ex8);
+    CHECK_RETV(retv, 8);
+    retv = hashTableInsert(&table, (char*)ex0);
+    CHECK_RETV(retv, 0);
+    retv = hashTableInsert(&table, (char*)ex13);
+    CHECK_RETV(retv, 13);
+    retv = hashTableInsert(&table, (char*)ex11);
+    CHECK_RETV(retv, 11);
+
+    retp = hashTableIteratorFirst(&tableIterator);
+    CHECK_RETV(retp, (char*)ex0);
+
+    retv = hashTableDelete(&table, (char*)ex0);
+    CHECK_RETV(retv, 0);
+
+    retp = hashTableIteratorFirst(&tableIterator);
+    CHECK_RETV(retp, (char*)ex8);
+
+    retv = hashTableDtor(&table);
+    CHECK_RETV(retv, 0);
+
+    retp = hashTableIteratorFirst(NULL);
+    CHECK_RETV_ERRNO(retp, NULL, EINVAL);
+
+    return 1;
+}
+int testHashTableIteratorNext()
+{
+    char *retp = hashTableIteratorNext(NULL);
+    CHECK_RETV_ERRNO(retp, NULL, EINVAL);
+
+    hashTable_t table;
+    int retv = hashTableCtor(&table, 16);
+    CHECK_RETV(retv, 0);
+
+    hashTableIterator_t tableIterator;
+    retv = hashTableIteratorCtor(&tableIterator, &table);
+    CHECK_RETV(retv, 0);
+
+    retp = hashTableIteratorNext(&tableIterator);
+    CHECK_RETV(retp, NULL);
+
+    char ex8[48] = "In law an infant, and in years a boy,";
+    char ex0[48] = "In mind a slave to every vicious joy;";
+    char ex13[48] = "From every sense of shame and virtue wean'd,";
+    char ex11[48] = "In lies an adept, in deceit a fiend;";
+    retv = hashTableInsert(&table, (char*)ex8);
+    CHECK_RETV(retv, 8);
+    retv = hashTableInsert(&table, (char*)ex0);
+    CHECK_RETV(retv, 0);
+    retv = hashTableInsert(&table, (char*)ex13);
+    CHECK_RETV(retv, 13);
+    retv = hashTableInsert(&table, (char*)ex11);
+    CHECK_RETV(retv, 11);
+
+    retp = hashTableIteratorNext(&tableIterator);
+    CHECK_RETV(retp, (char*)ex0);
+
+    retp = hashTableIteratorNext(&tableIterator);
+    CHECK_RETV(retp, (char*)ex8);
+
+    retv = hashTableDelete(&table, (char*)ex11);
+    CHECK_RETV(retv, 0);
+
+    retp = hashTableIteratorNext(&tableIterator);
+    CHECK_RETV(retp, (char*)ex13);
+
+    retv = hashTableDtor(&table);
+    CHECK_RETV(retv, 0);
+
+    return 1;
+}
+int testHashTableIteratorIsLast()
+{
+    int retv = hashTableIteratorIsLast(NULL);
+    CHECK_RETV_ERRNO(retv, -1, EINVAL);
+
+    hashTable_t table;
+    retv = hashTableCtor(&table, 16);
+    CHECK_RETV(retv, 0);
+
+    char ex8[48] = "In law an infant, and in years a boy,";
+    char ex0[48] = "In mind a slave to every vicious joy;";
+    char ex13[48] = "From every sense of shame and virtue wean'd,";
+    char ex11[48] = "In lies an adept, in deceit a fiend;";
+    retv = hashTableInsert(&table, (char*)ex8);
+    CHECK_RETV(retv, 8);
+    retv = hashTableInsert(&table, (char*)ex0);
+    CHECK_RETV(retv, 0);
+    retv = hashTableInsert(&table, (char*)ex13);
+    CHECK_RETV(retv, 13);
+    retv = hashTableInsert(&table, (char*)ex11);
+    CHECK_RETV(retv, 11);
+
+    hashTableIterator_t tableIterator;
+    retv = hashTableIteratorCtor(&tableIterator, &table);
+    CHECK_RETV(retv, 0);
+
+    retv = hashTableIteratorIsLast(&tableIterator);
+    CHECK_RETV(retv, 0);
+   
+    char *retp = hashTableIteratorFirst(&tableIterator);
+    CHECK_RETV(retp, (char*)ex0);
+
+    retv = hashTableIteratorIsLast(&tableIterator);
+    CHECK_RETV(retv, 0);
+
+    retp = hashTableIteratorNext(&tableIterator);
+    CHECK_RETV(retp, (char*)ex8);
+
+    retv = hashTableIteratorIsLast(&tableIterator);
+    CHECK_RETV(retv, 0);
+
+    retv = hashTableDelete(&table, (char*)ex11);
+    CHECK_RETV(retv, 0);
+
+    retv = hashTableDelete(&table, (char*)ex13);
+    CHECK_RETV(retv, 0);
+
+    retv = hashTableIteratorIsLast(&tableIterator);
+    CHECK_RETV(retv, 1);
+
+    return 1;
+}
+
+int testHashTableIteratorGet()
+{
+    char *retp = hashTableIteratorGet(NULL);
+    CHECK_RETV_ERRNO(retp, NULL, EINVAL);
+
+    hashTable_t table;
+    int retv = hashTableCtor(&table, 16);
+    CHECK_RETV(retv, 0);
+
+    hashTableIterator_t tableIterator;
+    retv = hashTableIteratorCtor(&tableIterator, &table);
+    CHECK_RETV(retv, 0);
+
+    /*for test purposes only*/
+    tableIterator.hashTable = NULL;
+    retp = hashTableIteratorGet(&tableIterator);
+    CHECK_RETV_ERRNO(retp, NULL, EINVAL);
+
+    /*restoring original value*/
+    retv = hashTableIteratorCtor(&tableIterator, &table);
+    CHECK_RETV(retv, 0);
+
+    retp = hashTableIteratorGet(&tableIterator);
+    CHECK_RETV_ERRNO(retp, NULL, EINVAL);
+
+    char ex8[48] = "In law an infant, and in years a boy,";
+    char ex0[48] = "In mind a slave to every vicious joy;";
+    char ex13[48] = "From every sense of shame and virtue wean'd,";
+    char ex11[48] = "In lies an adept, in deceit a fiend;";
+    retv = hashTableInsert(&table, (char*)ex8);
+    CHECK_RETV(retv, 8);
+    retv = hashTableInsert(&table, (char*)ex0);
+    CHECK_RETV(retv, 0);
+    retv = hashTableInsert(&table, (char*)ex13);
+    CHECK_RETV(retv, 13);
+    retv = hashTableInsert(&table, (char*)ex11);
+    CHECK_RETV(retv, 11);
+
+    retp = hashTableIteratorFirst(&tableIterator);
+    CHECK_RETV(retp, (char*)ex0);
+    retp = hashTableIteratorGet(&tableIterator);
+    CHECK_RETV(retp, (char*)ex0);
+
+    retp = hashTableIteratorNext(&tableIterator);
+    CHECK_RETV(retp, (char*)ex8);
+    retp = hashTableIteratorGet(&tableIterator);
+    CHECK_RETV(retp, (char*)ex8);
+
+    retv = hashTableDelete(&table, (char*)ex11);
+    CHECK_RETV(retv, 0);
+
+    retp = hashTableIteratorNext(&tableIterator);
+    CHECK_RETV(retp, (char*)ex13);
+    retp = hashTableIteratorGet(&tableIterator);
+    CHECK_RETV(retp, (char*)ex13);
+
+    retv = hashTableDtor(&table);
+    CHECK_RETV(retv, 0);
+    return 1;
+}
 
 int main(int argc, char** argv)
 {
@@ -233,74 +482,11 @@ int main(int argc, char** argv)
     PRTEST(testHashTableExpand());
     PRTEST(testHashTableFind());
     PRTEST(testHashTableDelete());
-    /*PRTEST(testHashTableIteratorCtor());
+    PRTEST(testHashTableIteratorCtor());
     PRTEST(testHashTableIteratorFirst());
     PRTEST(testHashTableIteratorNext());
     PRTEST(testHashTableIteratorIsLast());
-    PRTEST(testHashTableIteratorGet());*/
+    PRTEST(testHashTableIteratorGet());
 
     return 0;
 }
-
-/*int commonTest()
-{
-    int passed = 0;
-
-    char test_strings[14][64];
-    char findExample[64] = "And what was once his bliss appears his bane.";
-    FILE *filein = fopen("stringsForTests.txt", "r");
-    
-    if(filein == NULL)
-    {
-        perror("Input file");
-        exit(2);
-    }
-
-    for (int i = 0; i < 14; ++i)
-    {
-        fgets(test_strings[i], 64, filein);
-    }
-
-    hashTable_t test;
-    hashTableCtor(&test, 4);
-    for (int i = 0; i < 14; ++i)
-    {
-        hashTableInsert(&test, test_strings[i]);
-    }
-    hashTableInfo(&test, stderr);
-    if(hashTableFind(&test, (char*)findExample) >= 0)
-        fprintf(stderr, "Find -- Success\n");
-
-    for (int i = 0; i < 14; ++i)
-    {
-        hashTableDelete(&test, test_strings[i]);
-    }
-    hashTableInfo(&test, stderr);
-    hashTableDtor(&test);
-
-    fclose(filein);
-
-    return passed;
-}*/
-
-/*int nullComponentsTest()
-{
-    int passed = 0;
-    hashTable_t test_table;
-    char example[32] = "test";
-
-    hashTableCtor(NULL, 1);
-    hashTableCtor(&test_table, -1);
-    hashTableCtor(&test_table, 1024 * 16);
-    hashTableInfo(&test_table, stderr);
-
-    hashTableInsert(NULL, NULL);
-    hashTableInsert(&test_table, NULL);
-    hashTableInsert(NULL, (char *)example);
-
-    hashTableDtor(NULL);
-    hashTableDtor(&test_table);
-
-    return passed;
-
-}*/

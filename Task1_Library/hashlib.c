@@ -18,13 +18,18 @@
 #include "bitarraylib.h"
 //#define DBG_MODE
 
-unsigned int nearest2pwr(unsigned int value)
-{
-    unsigned int i = 1;
-    for(; value > i; i*=2);
+/****
+* Returns power of 2 that is bigger than value.
+*/
+unsigned int nearest2pwr(unsigned int value);
 
-    return i;
-}
+struct hashTable
+{
+    unsigned int capacity;
+    unsigned int used;
+    bitArray_t *inSequence;
+    char** table;
+};
 
 struct hashTableIterator
 {
@@ -34,7 +39,8 @@ struct hashTableIterator
 
 int hashTableIteratorCtor(hashTableIterator_t *this, hashTable_t *from)
 {
-    if(this == NULL || from == NULL)
+    if(this == NULL ||
+        from == NULL)
     {
         errno = EINVAL;
         return -1;
@@ -48,7 +54,8 @@ int hashTableIteratorCtor(hashTableIterator_t *this, hashTable_t *from)
 
 char *hashTableIteratorFirst(hashTableIterator_t *this)
 {
-    if(this == NULL || this->hashTable == NULL)
+    if(this == NULL ||
+        this->hashTable == NULL)
     {
         errno = EINVAL;
         return NULL;
@@ -68,13 +75,14 @@ char *hashTableIteratorFirst(hashTableIterator_t *this)
 
 char *hashTableIteratorNext(hashTableIterator_t *this)
 {
-    if(this == NULL || this->hashTable == NULL)
+    if(this == NULL ||
+        this->hashTable == NULL)
     {
         errno = EINVAL;
         return NULL ;
     }
 
-    for (int i = 0; this->currentIndex < this->hashTable->inSequence->capacity; ++i)
+    for (int i = this->currentIndex + 1; i < this->hashTable->inSequence->capacity; ++i)
         if(bitArrayTest(this->hashTable->inSequence, i) &&
           (this->hashTable->table)[i] != NULL)
             {
@@ -88,18 +96,17 @@ char *hashTableIteratorNext(hashTableIterator_t *this)
 
 int hashTableIteratorIsLast(hashTableIterator_t *this)
 {
-    if(this == NULL || this->hashTable == NULL)
+    if(this == NULL ||
+        this->hashTable == NULL)
     {
         errno = EINVAL;
         return -1;
     }
 
-    for (int i = 0; this->currentIndex < this->hashTable->inSequence->capacity; ++i)
+    for (int i = this->currentIndex + 1; i < this->hashTable->inSequence->capacity; ++i)
         if(bitArrayTest(this->hashTable->inSequence, i) &&
           (this->hashTable->table)[i] != NULL)
-            {
                 return 0;
-            }
 
     /*No more elements met*/
     return 1;
@@ -107,7 +114,8 @@ int hashTableIteratorIsLast(hashTableIterator_t *this)
 
 char *hashTableIteratorGet(hashTableIterator_t *this)
 {
-    if(this == NULL || this->hashTable == NULL ||
+    if(this == NULL ||
+        this->hashTable == NULL ||
        this->currentIndex < 0)
     {   
         errno = EINVAL;
@@ -130,7 +138,8 @@ unsigned int hashLY_odd(const char* string);
 int hashTableCtor(hashTable_t *this, unsigned int size)
 {
     /*second check is to ensure that size is positive*/
-    if(this == NULL || (int)size <= 0)
+    if(this == NULL ||
+        (int)size <= 0)
     {
         errno = EINVAL;
         return -1;
@@ -189,7 +198,8 @@ unsigned int hashGetIndex(const char* string, unsigned int probe, unsigned int s
 
 int hashTableInsert(hashTable_t *this, char* data)
 {
-    if(!hashTableVerify(this) || data == NULL)
+    if(!hashTableVerify(this) ||
+        data == NULL)
     {
         errno = EINVAL;
         return -2;
@@ -201,11 +211,10 @@ int hashTableInsert(hashTable_t *this, char* data)
     hashTableInfo(this, stderr);
     #endif
 
-    float load_factor = (float)this->used / (float)this->capacity;
-    if(load_factor >= 0.75)
+    if(this->used * 1024 >= this->capacity * 750)
     {
         #ifdef DBG_MODE
-        fprintf(stderr, "load_factor is %g, expansion initiated\n", load_factor);
+        fprintf(stderr, "load_factor exceeded, expansion initiated\n");
         #endif
         hashTableExpand(this);
     }
@@ -230,7 +239,8 @@ int hashTableInsert(hashTable_t *this, char* data)
 
 int hashTableFind(hashTable_t *this, char *data)
 {
-    if(!hashTableVerify(this) || data == NULL)
+    if(!hashTableVerify(this) ||
+        data == NULL)
     {
         errno = EINVAL;
         return -2;
@@ -265,33 +275,81 @@ int hashTableFind(hashTable_t *this, char *data)
 
 int hashTableDelete(hashTable_t *this, char *data)
 {
-    if(!hashTableVerify(this) || data == NULL)
+    if(!hashTableVerify(this) ||
+        data == NULL)
     {
         errno = EINVAL;
         return -2;
     }
 
-    int index = hashTableFind(this, data);
-    /*if no element with matching string found*/
-    if(index < 0)
+    /**/
+    unsigned int index = 0;
+    unsigned int probe = 0;
+    int data_len = strlen(data);
+    for(; probe < this->capacity; probe++)
+    {
+        index = hashGetIndex(data, probe, this->capacity);
+        if(!bitArrayTest(this->inSequence, index))
+        /*entry with this index is not a part of any sequence*/
+            return -1;
+
+        if((this->table)[index] == NULL)
+        /*enrty with this index has been cleared, moving on*/
+            continue;
+
+        /*lengths don't match*/
+        if(data_len != strlen((this->table)[index]))
+            continue;
+
+        if(!strncmp(data, (this->table)[index], data_len))
+        /*correspondent string found!*/
+            break;
+    }
+    /*no correspondent string found*/
+    if(probe == this->capacity)
         return -1;
 
     (this->table)[index] = NULL;
     this->used--;
+
+    int filled_ahead = 0;
+    /*go forward and check, if there is filled entry ahead*/
+    for(unsigned int i = probe + 1; i < this->capacity; i++)
+    {
+        unsigned int index = hashGetIndex(data, i, this->capacity);
+        if(bitArrayTest(this->inSequence, index))
+        {
+            filled_ahead++;
+            break;
+        }
+    }
+
+    if(!filled_ahead)
+    {
+        bitArrayClear(this->inSequence, index);
+        /*if nothing ahead, 
+        * go backwards trying to find filled entry while cleaning up 
+        * inSequence bit array.
+        */
+        for(unsigned int i = probe - 1; (int)i >= 0; i--)
+        {
+            unsigned int index = hashGetIndex(data, i, this->capacity);
+            if(bitArrayTest(this->inSequence, index))
+            {
+                if((this->table)[index] ==NULL)
+                    bitArrayClear(this->inSequence, index);
+                else
+                    break;          
+            }
+
+        }
+    }
+
     return 0;
 }
 
 int hashTableExpand(hashTable_t *this)
 {
-    /*this function is called only from hashTableInsert
-    *hashTableInsert already checks the validity*/
-    /*???? This check is not neccecary?*/
-    /*if(!hashTableVerify(this))
-    {
-        errno = EINVAL;
-        return -1;
-    }*/
-
     unsigned int new_size = 2 * this->capacity;
 
     bitArray_t *new_array = NULL;
@@ -335,7 +393,6 @@ int hashTableExpand(hashTable_t *this)
                     break;
                 }
             }
-            /*???? should i check, that string is really moved?*/
         }
 
     bitArrayDtor(this->inSequence);
@@ -417,4 +474,12 @@ unsigned int hashLY_odd(const char* string)
 
     return hash | 1;
 
+}
+
+unsigned int nearest2pwr(unsigned int value)
+{
+    unsigned int i = 1;
+    for(; value > i; i*=2);
+
+    return i;
 }

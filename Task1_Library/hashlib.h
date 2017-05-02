@@ -11,9 +11,7 @@
 *       we double the size when it meets 
 *       the threshold of 75%, so we can ensure 
 *       that averagely it takes less than 4 
-*       probes to insert a new string.
-*
-*       Table size also has to be a power of 2.      
+*       probes to insert a new string.     
 *       
 * AUTHOR: Litovchenko Leonid
 *
@@ -21,18 +19,15 @@
 *
 */
 
-/*использовать автоматическое увеличение размера таблицы
-для поддержания высокого быстродействия*/
-
-/*использовать битовый массив для индикации, принадлежит
-ли ячейчка какой-нибудь из хеш последовательностей
-По этому же битовому массиву проверять заполняемость таблицы.
+/*!!!! Non existence of picking up loosed ends
+* causes degradation, because longer sequences
+* of isSequence but NULL exists.
 */
-
-/*функция конструктор принимает любое значение, но т.к.
-размер должен быть степенью 2, то округляет размер до
-степени 2 в большую сторону.
-*/
+/*!!!! Probable solution: choosing DEL value
+* 0x1 or 0xd for example.
+* This value is not valid due to inability to
+* access this adress.
+*/ 
 
 #ifndef HASHLIB_H
 #define HASHLIB_H
@@ -40,13 +35,7 @@
 
 typedef struct bitArray bitArray_t;
 
-typedef struct hashTable
-{
-    unsigned int capacity;
-    unsigned int used;
-    bitArray_t *inSequence;
-    char** table;
-} hashTable_t;
+typedef struct hashTable hashTable_t;
 
 typedef struct hashTableIterator hashTableIterator_t; 
 

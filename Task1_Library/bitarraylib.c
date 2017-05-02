@@ -76,3 +76,17 @@ int bitArrayTest(bitArray_t *this, unsigned int index)
     else
         return 0;     
 }
+
+int bitArrayClear(bitArray_t *this, unsigned int index)
+{
+    if(index < 0 || 
+       index >= this->capacity)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
+    (this->array)[index / align] &= (~(1 << index % align));
+
+    return 0; 
+}
