@@ -121,6 +121,14 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
+    /*OBERTKA sync message*/
+    int sync;
+    if(recv(tcp_sock, &sync, sizeof(int), 0) < 0)
+    {
+        printf("TCP server recv: Unsuccessful\n");
+        exit(EXIT_FAILURE);
+    }
+
     close(tcp_sock);
      
     return 0;

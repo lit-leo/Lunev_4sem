@@ -158,6 +158,7 @@ int main(int argc , char *argv[])
     struct sockaddr_in server_sock;
     unsigned int sockaddr_len = sizeof(struct sockaddr);
     //!!!!! RACE!! Possible sleep needed!
+    sleep(3);
     for (int i = 0; i < servers_qty; ++i)
     {
         server[i].res = 0;
@@ -214,6 +215,7 @@ int main(int argc , char *argv[])
     #endif
 
     //info sending
+    int done = 0;
     for (int i = 0; i < servers_qty; ++i)
     {
         event.data.fd = server[i].fd;
@@ -250,11 +252,17 @@ int main(int argc , char *argv[])
                         printf("TCP client send: Unsuccessful\n");
                         exit(EXIT_FAILURE);
                     }
+                    done++;
                     break;
                 }
-
             }
-            
+            if(done)
+                break;
+        }
+        if(epoll_ctl(epollfd, EPOLL_CTL_DEL, server[i].fd, &event) == -1)
+        {
+            perror("epoll_ctl");
+            exit(EXIT_FAILURE);
         }
         /*if(send(server[i].fd, &(server[i].left), sizeof(double), 0) < 0)
         {
@@ -270,48 +278,51 @@ int main(int argc , char *argv[])
     }
     //sleep(20);
     //results mining
-for (int i = 0; i < servers_qty; ++i)
-{
-    event.data.fd = server[i].fd;
-    event.events = EPOLLIN;
-    if(epoll_ctl(epollfd, EPOLL_CTL_MOD, server[i].fd, &event) == -1)
+    done = 0;
+    for (int i = 0; i < servers_qty; ++i)
     {
-        perror("epoll_ctl");
-        exit(EXIT_FAILURE);
-    }
-    while(1)
-    {
-        int qty = epoll_wait(epollfd, events, 64, 10);
-        if(qty == -1)
+        event.data.fd = server[i].fd;
+        event.events = EPOLLIN;
+        if(epoll_ctl(epollfd, EPOLL_CTL_ADD, server[i].fd, &event) == -1)
         {
-            perror("epoll_wait");
+            perror("epoll_ctl");
             exit(EXIT_FAILURE);
         }
-
-        for (int i = 0; i < qty; ++i)
+        while(1)
         {
-            if(events[i].events & EPOLLERR ||
-                events[i].events & EPOLLHUP ||
-                events[i].events & EPOLLRDHUP ||
-                !(events[i].events & EPOLLIN))
-                //error occured
+            int qty = epoll_wait(epollfd, events, 64, 10000);
+            if(qty == -1)
             {
-                printf("epoll socket problems\n");
+                perror("epoll_wait");
                 exit(EXIT_FAILURE);
             }
-            else if(events[i].events & EPOLLIN)
+
+            for (int i = 0; i < qty; ++i)
             {
-                if(recv(server[i].fd, &(server[i].res), sizeof(double), 0) <= 0)
+                if(events[i].events & EPOLLERR ||
+                    events[i].events & EPOLLHUP ||
+                    events[i].events & EPOLLRDHUP ||
+                    !(events[i].events & EPOLLIN))
+                    //error occured
                 {
-                    printf("TCP client recv: Recieve failed\n");
-                    exit(EXIT_FAILURE);            
+                    printf("epoll socket problems\n");
+                    exit(EXIT_FAILURE);
                 }
-                break;
+                else if(events[i].events & EPOLLIN)
+                {
+                    if(recv(server[i].fd, &(server[i].res), sizeof(double), 0) <= 0)
+                    {
+                        printf("TCP client recv: Recieve failed\n");
+                        exit(EXIT_FAILURE);            
+                    }
+                    done++;
+                    break;
+                }
             }
+            if(done)
+                break;
         }
-        
     }
-}
     /*for (int i = 0; i < servers_qty; ++i)
     {
         if(recv(server[i].fd, &(server[i].res), sizeof(double), 0) <= 0)
@@ -320,11 +331,16 @@ for (int i = 0; i < servers_qty; ++i)
             exit(EXIT_FAILURE);            
         }
     }*/
-
+    int sync;
     double res = 0;
     for (int i = 0; i < servers_qty; ++i)
     {
         res += server[i].res;
+        if(send(server[i].fd, &sync, sizeof(int), 0) < 0)
+        {
+            printf("TCP client send: Unsuccessful\n");
+            exit(EXIT_FAILURE);
+        }
         close(server[i].fd);
     }
     printf("RESULT:: %g\n", res);
