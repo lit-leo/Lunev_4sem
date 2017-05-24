@@ -163,6 +163,7 @@ int main(int argc , char *argv[])
     {
         server[i].res = 0;
         server[i].fd = accept(tcp_sock, (struct sockaddr *)&server_sock, (socklen_t *)&sockaddr_len);
+        sleep(5);
         if(server[i].fd < 0)
         {
             printf("TCP client accept: Connection failed\n");
@@ -235,20 +236,20 @@ int main(int argc , char *argv[])
                 exit(EXIT_FAILURE);
             }
 
-            for (int i = 0; i < qty; ++i)
+            for (int j = 0; j < qty; ++j)
             {
-                if(events[i].events & EPOLLERR ||
-                   events[i].events & EPOLLHUP ||
-                   events[i].events & EPOLLRDHUP ||
-                   !(events[i].events & EPOLLOUT))
+                if(events[j].events & EPOLLERR ||
+                   events[j].events & EPOLLHUP ||
+                   events[j].events & EPOLLRDHUP ||
+                   !(events[j].events & EPOLLOUT))
                     //error occured
                 {
                     printf("epoll socket problems\n");
                     exit(EXIT_FAILURE);
                 }
-                else if(events[i].events & EPOLLOUT)
+                else if(events[j].events & EPOLLOUT)
                 {
-                    if(send(events[i].data.fd, &(server[i].limit), sizeof(limits_t), 0) < 0)
+                    if(send(events[j].data.fd, &(server[i].limit), sizeof(limits_t), 0) < 0)
                     {
                         printf("TCP client send: Unsuccessful\n");
                         exit(EXIT_FAILURE);
@@ -299,20 +300,20 @@ int main(int argc , char *argv[])
                 exit(EXIT_FAILURE);
             }
 
-            for (int i = 0; i < qty; ++i)
+            for (int j = 0; j < qty; ++j)
             {
-                if(events[i].events & EPOLLERR ||
-                    events[i].events & EPOLLHUP ||
-                    events[i].events & EPOLLRDHUP ||
-                    !(events[i].events & EPOLLIN))
+                if(events[j].events & EPOLLERR ||
+                    events[j].events & EPOLLHUP ||
+                    events[j].events & EPOLLRDHUP ||
+                    !(events[j].events & EPOLLIN))
                     //error occured
                 {
                     printf("epoll socket problems\n");
                     exit(EXIT_FAILURE);
                 }
-                else if(events[i].events & EPOLLIN)
+                else if(events[j].events & EPOLLIN)
                 {
-                    if(recv(events[i].data.fd, &(server[i].res), sizeof(double), 0) <= 0)
+                    if(recv(events[j].data.fd, &(server[i].res), sizeof(double), 0) <= 0)
                     {
                         printf("TCP client recv: Recieve failed\n");
                         exit(EXIT_FAILURE);            
@@ -333,7 +334,7 @@ int main(int argc , char *argv[])
             exit(EXIT_FAILURE);            
         }
     }*/
-    sleep(15);
+    //sleep(15);
     int sync;
     double res = 0;
     for (int i = 0; i < servers_qty; ++i)
