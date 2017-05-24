@@ -215,9 +215,10 @@ int main(int argc , char *argv[])
     #endif
 
     //info sending
-    int done = 0;
+    int done;
     for (int i = 0; i < servers_qty; ++i)
     {
+        done = 0;
         event.data.fd = server[i].fd;
         event.events = EPOLLOUT;
         if(epoll_ctl(epollfd, EPOLL_CTL_MOD, server[i].fd, &event) == -1)
@@ -247,7 +248,7 @@ int main(int argc , char *argv[])
                 }
                 else if(events[i].events & EPOLLOUT)
                 {
-                    if(send(server[i].fd, &(server[i].limit), sizeof(limits_t), 0) < 0)
+                    if(send(events[i].data.fd, &(server[i].limit), sizeof(limits_t), 0) < 0)
                     {
                         printf("TCP client send: Unsuccessful\n");
                         exit(EXIT_FAILURE);
@@ -278,9 +279,10 @@ int main(int argc , char *argv[])
     }
     //sleep(20);
     //results mining
-    done = 0;
+    
     for (int i = 0; i < servers_qty; ++i)
-    {
+    {   
+        done = 0;
         event.data.fd = server[i].fd;
         event.events = EPOLLIN;
         if(epoll_ctl(epollfd, EPOLL_CTL_ADD, server[i].fd, &event) == -1)
@@ -310,7 +312,7 @@ int main(int argc , char *argv[])
                 }
                 else if(events[i].events & EPOLLIN)
                 {
-                    if(recv(server[i].fd, &(server[i].res), sizeof(double), 0) <= 0)
+                    if(recv(events[i].data.fd, &(server[i].res), sizeof(double), 0) <= 0)
                     {
                         printf("TCP client recv: Recieve failed\n");
                         exit(EXIT_FAILURE);            
@@ -331,6 +333,7 @@ int main(int argc , char *argv[])
             exit(EXIT_FAILURE);            
         }
     }*/
+    sleep(15);
     int sync;
     double res = 0;
     for (int i = 0; i < servers_qty; ++i)
