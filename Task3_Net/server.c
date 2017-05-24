@@ -4,6 +4,12 @@
 
 #define EXIT_FAILURE 1
 
+typedef struct limits
+{
+    double left;
+    double right;
+} limits_t;
+
 double calculate_integral(int thrds_qty, double left, double right);
 
 long pasreInput(int argc, char** argv)
@@ -86,8 +92,6 @@ int main(int argc , char *argv[])
     dest.sin_port = htons(tcp_port);
     dest.sin_family = AF_INET;
 
-    sleep(2);
-
     if(connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr)) < 0)
     {
         printf("TCP server connect: Connection unsuccessful\n");
@@ -100,14 +104,8 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    double left, right;
-    if(recv(tcp_sock, &left, sizeof(double), 0) < 0)
-    {
-        printf("TCP server recv: Unsuccessful\n");
-        exit(EXIT_FAILURE);
-    }
-
-    if(recv(tcp_sock, &right, sizeof(double), 0) < 0)
+    limits_t limit;
+    if(recv(tcp_sock, &limit, sizeof(limits_t), 0) < 0)
     {
         printf("TCP server recv: Unsuccessful\n");
         exit(EXIT_FAILURE);
@@ -115,7 +113,7 @@ int main(int argc , char *argv[])
 
     /*double left = 1;
     double right = 2;*/
-    double res = calculate_integral(threads_req, left, right);
+    double res = calculate_integral(threads_req, limit.left, limit.right);
     printf("res = %g\n", res);
     if(send(tcp_sock, &res, sizeof(double), 0) < 0)
     {

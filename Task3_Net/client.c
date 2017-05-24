@@ -28,12 +28,17 @@ long pasreInput(int argc, char** argv)
     return threads_req;
 }
 
+typedef struct limits
+{
+    double left;
+    double right;
+} limits_t;
+
 typedef struct server_fd
 {
     int fd;
     int threads_avail;
-    double left;
-    double right;
+    limits_t limit;
     double res;
 
 } server_struc_t;
@@ -108,7 +113,7 @@ int main(int argc , char *argv[])
 
     close(udp_socket);
 
-    /*tcp connection*/
+    //tcp connection
     int tcp_sock = socket(AF_INET , SOCK_STREAM, 0);
     if(tcp_sock == -1)
     {
@@ -131,6 +136,10 @@ int main(int argc , char *argv[])
         perror("TCP client socket binding");
         exit(EXIT_FAILURE);
     }
+    //make socket nonblock
+    int flags = fcntl(tcp_sock, F_GETFL);
+    flags |= O_NONBLOCK;
+    fcntl(tcp_sock, F_SETFL, flags);
 
     listen(tcp_sock, servers_qty);
 
@@ -148,6 +157,7 @@ int main(int argc , char *argv[])
     int threads_total = 0;
     struct sockaddr_in server_sock;
     unsigned int sockaddr_len = sizeof(struct sockaddr);
+    //!!!!! RACE!! Possible sleep needed!
     for (int i = 0; i < servers_qty; ++i)
     {
         server[i].res = 0;
@@ -168,10 +178,18 @@ int main(int argc , char *argv[])
         threads_total += server[i].threads_avail;
 
         //make socket nonblock
-        /*int flags = fcntl(server[i].fd, F_GETFL);
+        /*int flags = fcntl(tcp_sock, F_GETFL);
         flags |= O_NONBLOCK;
-        fcntl(server[i].fd, F_SETFL, flags);*/
-        /*epoll structure add*/
+        fcntl(tcp_sock, F_SETFL, flags);*/
+
+        //epoll structure add
+        /*event.data.fd = server[i].fd; disabled for OBERTKA
+        event.events = EPOLLOUT;*/
+        if(epoll_ctl(epollfd, EPOLL_CTL_ADD, server[i].fd, &event) == -1)
+        {
+            perror("epoll_ctl");
+            exit(EXIT_FAILURE);
+        }
     }
 
     //distribution
@@ -179,9 +197,9 @@ int main(int argc , char *argv[])
     double current_left = left;
     for (int i = 0; i < servers_qty; ++i)
     {
-        server[i].left = current_left;
-        server[i].right = current_left + server[i].threads_avail * seg_size;
-        current_left = server[i].right;
+        server[i].limit.left = current_left;
+        server[i].limit.right = current_left + server[i].threads_avail * seg_size;
+        current_left = server[i].limit.right;
     }
 
     #ifdef NET_DEBUG
@@ -190,15 +208,52 @@ int main(int argc , char *argv[])
     {
         printf("server[%d].fd = %d\n", i, server[i].fd);
         printf("server[%d].threads_avail = %d\n", i, server[i].threads_avail);
-        printf("server[%d].left = %g\n", i, server[i].left);
-        printf("server[%d].right = %g\n", i, server[i].right);
+        printf("server[%d].limit.left = %g\n", i, server[i].limit.left);
+        printf("server[%d].limit.right = %g\n", i, server[i].limit.right);
     }
     #endif
 
     //info sending
     for (int i = 0; i < servers_qty; ++i)
     {
-        if(send(server[i].fd, &(server[i].left), sizeof(double), 0) < 0)
+        event.data.fd = server[i].fd;
+        event.events = EPOLLOUT;
+        if(epoll_ctl(epollfd, EPOLL_CTL_MOD, server[i].fd, &event) == -1)
+        {
+            perror("epoll_ctl");
+            exit(EXIT_FAILURE);
+        }
+        while(1)
+        {
+            int qty = epoll_wait(epollfd, events, 64, 10);
+            if(qty == -1)
+            {
+                perror("epoll_wait");
+                exit(EXIT_FAILURE);
+            }
+
+            for (int i = 0; i < qty; ++i)
+            {
+                if(events[i].events & EPOLLERR ||
+                   events[i].events & EPOLLHUP ||
+                   events[i].events & EPOLLRDHUP ||
+                   !(events[i].events & EPOLLOUT))
+                    //error occured
+                {
+                    printf("epoll socket problems\n");
+                    exit(EXIT_FAILURE);
+                }
+                else if(events[i].events & EPOLLOUT)
+                        if(send(server[i].fd, &(server[i].limit), sizeof(limits_t), 0) < 0)
+                        {
+                            printf("TCP client send: Unsuccessful\n");
+                            exit(EXIT_FAILURE);
+                        }
+
+            }
+            
+        }
+        /*if(send(server[i].fd, &(server[i].left), sizeof(double), 0) < 0)
         {
             printf("TCP client send: Unsuccessful\n");
             exit(EXIT_FAILURE);
@@ -208,7 +263,7 @@ int main(int argc , char *argv[])
         {
             printf("TCP client send: Unsuccessful\n");
             exit(EXIT_FAILURE);
-        }
+        }*/
     }
     //sleep(20);
     //results mining
