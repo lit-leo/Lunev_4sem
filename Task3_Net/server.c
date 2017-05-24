@@ -1,24 +1,42 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h> /* for strncpy */
-
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <netinet/in.h>
-#include <net/if.h>
-#include <arpa/inet.h>
+#include "common.h"
 #define NET_DEBUG
 
 #define EXIT_FAILURE 1
+
+double calculate_integral(int thrds_qty, double left, double right);
+
+long pasreInput(int argc, char** argv)
+{
+    if (argc != 2)
+    {
+        printf("Usage: ./command <quantity_of_threads>\n");
+        exit(-1);
+    }
+    
+    char* endptr = NULL;
+    errno = 0;  
+    long threads_req = strtol(argv[1], &endptr, 10);
+    if (errno != 0)
+    {
+        perror("Strtol:");
+        exit(errno);
+    }
+    if (*endptr != '\0')
+    {
+        printf("2nd arg is not a number\n");
+        exit(-1);
+    }
+
+    return threads_req;
+}
  
 int main(int argc , char *argv[])
 {
-    /*UDP connection*/
     const unsigned udp_port = 8886;
     const unsigned tcp_port = 8888;
+    const int threads_req = (int)pasreInput(argc, argv);
 
+    //UDP connection
     int udp_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if(udp_sock == -1)
     {
@@ -31,7 +49,7 @@ int main(int argc , char *argv[])
     sock_in.sin_port = htons(udp_port);
     sock_in.sin_family = AF_INET;
 
-    /*bind*/
+    //bind
     if(bind(udp_sock, (struct sockaddr *)&sock_in, sizeof(struct sockaddr)) == -1)
     {
         perror("UDP server binding");
@@ -43,19 +61,15 @@ int main(int argc , char *argv[])
     memset(&client_addr, 0, sizeof(struct in_addr));
     recvfrom(udp_sock, &client_addr, sizeof(struct in_addr), 0, 
         (struct sockaddr *)&sock_in, &sockaddr_len);
-    /* I want to get an IPv4 IP address */
-    //ifr.ifr_addr.sa_family = AF_INET;
-
-    /* I want IP address attached to "wlp3s0" */
 
     #ifdef NET_DEBUG
-    /* display result */
+    //display result
     printf("recv = %s\n", inet_ntoa(((struct sockaddr_in *)&sock_in)->sin_addr));
     printf("content = %s\n", inet_ntoa(client_addr));
     #endif
     close(udp_sock);
     
-    /*tcp connections*/
+    //tcp connections
     int tcp_sock = socket(AF_INET , SOCK_STREAM , 0);
     if(tcp_sock == -1)
     {
@@ -75,13 +89,36 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    if(send(tcp_sock, "tcp-test", 9, 0) < 0)
+    if(send(tcp_sock, &threads_req, sizeof(int), 0) < 0)
     {
         printf("TCP server send: Unsuccessful\n");
         exit(EXIT_FAILURE);
     }
 
-    close(tcp_sock);
+    /*double left, right;
+    if(recv(tcp_sock, &left, sizeof(double), 0) < 0)
+    {
+        printf("TCP server recv: Unsuccessful\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if(recv(tcp_sock, &right, sizeof(double), 0) < 0)
+    {
+        printf("TCP server recv: Unsuccessful\n");
+        exit(EXIT_FAILURE);
+    }*/
+
+    double left = 1;
+    double right = 2;
+    double res = calculate_integral(threads_req, left, right);
+    printf("res = %g\n", res);
+    /*if(send(tcp_sock, &res, sizeof(double), 0) < 0)
+    {
+        printf("TCP server send: Unsuccessful\n");
+        exit(EXIT_FAILURE);
+    }
+
+    close(tcp_sock);*/
      
     return 0;
 }

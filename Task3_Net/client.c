@@ -1,14 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h> /* for strncpy */
-
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <netinet/in.h>
-#include <net/if.h>
-#include <arpa/inet.h>
+#include "common.h"
 #define NET_DEBUG
  
 #define EXIT_FAILURE 1
@@ -106,13 +96,13 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    char buffer[9];
-    recv(server_fd[0], buffer, 9, 0);
-    printf("%s\n", buffer);
+    int quant;
+    recv(server_fd[0], &quant, sizeof(int), 0);
+    printf("%d\n", quant);
 
     close(server_fd[0]);
     close(tcp_sock);
-    
+
     return 0;
 
 }
