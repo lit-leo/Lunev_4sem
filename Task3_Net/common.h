@@ -6,6 +6,9 @@
 #include <string.h> /* for strncpy */
 #include <errno.h>
 
+#include <sys/eventfd.h>
+#include <sys/epoll.h>
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>

@@ -109,7 +109,7 @@ int main(int argc , char *argv[])
     close(udp_socket);
 
     /*tcp connection*/
-    int tcp_sock = socket(AF_INET , SOCK_STREAM , 0);
+    int tcp_sock = socket(AF_INET , SOCK_STREAM, 0);
     if(tcp_sock == -1)
     {
         perror("TCP client socket creation");
@@ -126,6 +126,15 @@ int main(int argc , char *argv[])
     }
 
     listen(tcp_sock, servers_qty);
+
+    int epollfd = epoll_create1(0);
+    if(epollfd == -1)
+    {
+        perror("epoll");
+        exit(EXIT_FAILURE);
+    }
+    struct epoll_event event;
+    struct epoll_event events[64];
 
     server_struc_t server[servers_qty];
     int max_fd = 0;
@@ -144,12 +153,18 @@ int main(int argc , char *argv[])
         if(server[i].fd > max_fd)
             max_fd = server[i].fd;
 
-        if(recv(server[i].fd,&(server[i].threads_avail), sizeof(int), 0) <= 0)
+        if(recv(server[i].fd, &(server[i].threads_avail), sizeof(int), 0) <= 0)
         {
             printf("TCP client recv: Recieve failed\n");
             exit(EXIT_FAILURE);            
         }
         threads_total += server[i].threads_avail;
+
+        //make socket nonblock
+        /*int flags = fcntl(server[i].fd, F_GETFL);
+        flags |= O_NONBLOCK;
+        fcntl(server[i].fd, F_SETFL, flags);*/
+        /*epoll structure add*/
     }
 
     //distribution
@@ -166,38 +181,46 @@ int main(int argc , char *argv[])
     printf("server struct info:\n");
     for (int i = 0; i < servers_qty; ++i)
     {
-        printf("server[%d].fd = %d", i, server[i].fd);
-        printf("server[%d].threads_avail = %d", i, server[i].threads_avail);
-        printf("server[%d].left = %g", i, server[i].left);
-        printf("server[%d].right = %g", i, server[i].right);
+        printf("server[%d].fd = %d\n", i, server[i].fd);
+        printf("server[%d].threads_avail = %d\n", i, server[i].threads_avail);
+        printf("server[%d].left = %g\n", i, server[i].left);
+        printf("server[%d].right = %g\n", i, server[i].right);
     }
     #endif
 
     //info sending
-    if(send(server[0].fd, &left, sizeof(double), 0) < 0)
-    {
-        printf("TCP client send: Unsuccessful\n");
-        exit(EXIT_FAILURE);
-    }
-
-    if(send(server[0].fd, &right, sizeof(double), 0) < 0)
-    {
-        printf("TCP client send: Unsuccessful\n");
-        exit(EXIT_FAILURE);
-    }
-
-    //results mining
-    if(recv(server[0].fd, &(server[0].res), sizeof(double), 0) <= 0)
-    {
-        printf("TCP client recv: Recieve failed\n");
-        exit(EXIT_FAILURE);            
-    }
-
     for (int i = 0; i < servers_qty; ++i)
     {
+        if(send(server[i].fd, &(server[i].left), sizeof(double), 0) < 0)
+        {
+            printf("TCP client send: Unsuccessful\n");
+            exit(EXIT_FAILURE);
+        }
+
+        if(send(server[i].fd, &(server[i].right), sizeof(double), 0) < 0)
+        {
+            printf("TCP client send: Unsuccessful\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+    //sleep(20);
+    //results mining
+    for (int i = 0; i < servers_qty; ++i)
+    {
+        if(recv(server[i].fd, &(server[i].res), sizeof(double), 0) <= 0)
+        {
+            printf("TCP client recv: Recieve failed\n");
+            exit(EXIT_FAILURE);            
+        }
+    }
+
+    double res = 0;
+    for (int i = 0; i < servers_qty; ++i)
+    {
+        res += server[i].res;
         close(server[i].fd);
     }
-    printf("RESULT:: %g\n", server[0].res);
+    printf("RESULT:: %g\n", res);
     close(tcp_sock);
 
     return 0;
