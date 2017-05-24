@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <net/if.h>
 #include <arpa/inet.h>
+#define NET_DEBUG
  
 #define EXIT_FAILURE 1
 
@@ -75,5 +76,42 @@ int main(int argc , char *argv[])
         (struct sockaddr *)&sock_in, sizeof(struct sockaddr_in));
 
     close(udp_socket);
+
+    /*tcp connection*/
+    int tcp_sock = socket(AF_INET , SOCK_STREAM , 0);
+    if(tcp_sock == -1)
+    {
+        perror("TCP client socket creation");
+        exit(EXIT_FAILURE);
+    }
+
+    sock_in.sin_addr.s_addr = ip_addr.s_addr;
+    sock_in.sin_port = htons(tcp_port);
+    sock_in.sin_family = AF_INET;
+    if(bind(tcp_sock, (struct sockaddr*)&sock_in, sizeof(struct sockaddr)) == -1)
+    {
+        perror("TCP client socket binding");
+        exit(EXIT_FAILURE);
+    }
+
+    listen(tcp_sock, 1);
+    int server_fd[1];
+
+    struct sockaddr_in server;
+    unsigned int sockaddr_len = sizeof(struct sockaddr);
+    server_fd[0] = accept(tcp_sock, (struct sockaddr *)&server, (socklen_t *)&sockaddr_len);
+    if(server_fd[0] < 0)
+    {
+        printf("TCP client accept: Connection failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    char buffer[9];
+    recv(server_fd[0], buffer, 9, 0);
+    printf("%s\n", buffer);
+
+    close(server_fd[0]);
+    close(tcp_sock);
+    return 0;
 
 }

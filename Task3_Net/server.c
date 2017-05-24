@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <net/if.h>
 #include <arpa/inet.h>
+#define NET_DEBUG
 
 #define EXIT_FAILURE 1
  
@@ -47,14 +48,35 @@ int main(int argc , char *argv[])
 
     /* I want IP address attached to "wlp3s0" */
 
+    #ifdef NET_DEBUG
+    /* display result */
     printf("recv = %s\n", inet_ntoa(((struct sockaddr_in *)&sock_in)->sin_addr));
     printf("content = %s\n", inet_ntoa(client_addr));
+    #endif
     close(udp_sock);
-     
-    /* display result */
-    /*udp broadband connection*/
-
+    
     /*tcp connections*/
+    int tcp_sock = socket(AF_INET , SOCK_STREAM , 0);
+    if(tcp_sock == -1)
+    {
+        perror("TCP server socket creation");
+        exit(EXIT_FAILURE);
+    }
+    sock_in.sin_port = tcp_port;
+
+    if(connect(tcp_sock, (struct sockaddr *)&sock_in, sockaddr_len) < 0)
+    {
+        printf("TCP server connect: Connection unsuccessful\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if(send(tcp_sock, "tcp-test", 9, 0) < 0)
+    {
+        printf("TCP server send: Unsuccessful\n");
+        exit(EXIT_FAILURE);
+    }
+
+    close(tcp_sock);
      
     return 0;
 }
