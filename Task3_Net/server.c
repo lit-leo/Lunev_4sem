@@ -1,5 +1,6 @@
 #include "common.h"
 #define NET_DEBUG
+//#define INET_LOOPBACK
 
 #define EXIT_FAILURE 1
 
@@ -47,7 +48,7 @@ int main(int argc , char *argv[])
     struct sockaddr_in sock_in;
     sock_in.sin_addr.s_addr = INADDR_ANY;
     sock_in.sin_port = htons(udp_port);
-    sock_in.sin_family = AF_INET;
+    sock_in.sin_family = AF_INET;/**/
 
     //bind
     if(bind(udp_sock, (struct sockaddr *)&sock_in, sizeof(struct sockaddr)) == -1)
@@ -55,6 +56,7 @@ int main(int argc , char *argv[])
         perror("UDP server binding");
         exit(EXIT_FAILURE);
     }
+
 
     unsigned int sockaddr_len = sizeof(struct sockaddr);
     struct in_addr client_addr;
@@ -78,6 +80,9 @@ int main(int argc , char *argv[])
     }
     struct sockaddr_in dest;
     dest.sin_addr = client_addr;
+    #ifdef INET_LOOPBACK
+    sock_in.sin_addr.s_addr = inet_addr("127.0.0.1");
+    #endif
     dest.sin_port = htons(tcp_port);
     dest.sin_family = AF_INET;
 

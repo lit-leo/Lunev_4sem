@@ -1,12 +1,47 @@
 #include "common.h"
 #define NET_DEBUG
- 
+//#define INET_LOOPBACK/**/
 #define EXIT_FAILURE 1
+
+long pasreInput(int argc, char** argv)
+{
+    if (argc != 2)
+    {
+        printf("Usage: ./command <quantity_of_threads>\n");
+        exit(-1);
+    }
+    
+    char* endptr = NULL;
+    errno = 0;  
+    long threads_req = strtol(argv[1], &endptr, 10);
+    if (errno != 0)
+    {
+        perror("Strtol:");
+        exit(errno);
+    }
+    if (*endptr != '\0')
+    {
+        printf("2nd arg is not a number\n");
+        exit(-1);
+    }
+
+    return threads_req;
+}
+
+typedef struct server_fd
+{
+    int fd;
+    int threads_avail;
+    double left;
+    double right;
+
+} server_struc_t;
 
 int main(int argc , char *argv[])
 {
     const unsigned udp_port = 8886;
     const unsigned tcp_port = 8888;
+    const int servers_qty = (int)pasreInput(argc, argv);
     /*UDP - broadcast connection*/
     
     int udp_socket;
@@ -20,6 +55,9 @@ int main(int argc , char *argv[])
     struct ifreq ifr_ip;
     ifr_ip.ifr_addr.sa_family = AF_INET;
     strncpy(ifr_ip.ifr_name, "wlp3s0", IFNAMSIZ-1);
+    #ifdef INET_LOOPBACK
+    strncpy(ifr_ip.ifr_name, "lo", IFNAMSIZ-1);
+    #endif
     if(ioctl(udp_socket, SIOCGIFADDR, &ifr_ip) == -1)
     {
         perror("Getting ip address");
@@ -84,23 +122,32 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    listen(tcp_sock, 1);
-    int server_fd[1];
+    listen(tcp_sock, servers_qty);
 
-    struct sockaddr_in server;
+    server_struc_t server[servers_qty];
+    int threads_total = 0;
+    struct sockaddr_in server_sock;
     unsigned int sockaddr_len = sizeof(struct sockaddr);
-    server_fd[0] = accept(tcp_sock, (struct sockaddr *)&server, (socklen_t *)&sockaddr_len);
-    if(server_fd[0] < 0)
+    for (int i = 0; i < servers_qty; ++i)
     {
-        printf("TCP client accept: Connection failed\n");
-        exit(EXIT_FAILURE);
+        server[i].fd = accept(tcp_sock, (struct sockaddr *)&server_sock, (socklen_t *)&sockaddr_len);
+        if(server[i].fd < 0)
+        {
+            printf("TCP client accept: Connection failed\n");
+            exit(EXIT_FAILURE);
+        }
+        if(recv(server[i].fd,&(server[i].threads_avail), sizeof(int), 0) <= 0)
+        {
+            printf("TCP client recv: Recieve failed\n");
+            exit(EXIT_FAILURE);            
+        }
+        threads_total += server[i].threads_avail;
     }
 
-    int quant;
-    recv(server_fd[0], &quant, sizeof(int), 0);
-    printf("%d\n", quant);
-
-    close(server_fd[0]);
+    for (int i = 0; i < servers_qty; ++i)
+    {
+        close(server[i].fd);
+    }
     close(tcp_sock);
 
     return 0;
