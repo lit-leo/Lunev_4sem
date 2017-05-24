@@ -111,7 +111,7 @@ double calculate_integral(int thrds_qty, double left, double right)
     double res = 0;
     double a = left;
     double b = right;
-    double step = (b - a)/500000000; //1000000000
+    double step = (b - a)/3000000000; //1000000000
     double range = (b - a) / threads_req;
 
     calc_structure_t calc_struc[threads_req];
