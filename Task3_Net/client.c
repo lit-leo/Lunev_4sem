@@ -116,6 +116,13 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
+    int enable_reuse = 1;
+    if(setsockopt(tcp_sock, SOL_SOCKET, SO_REUSEADDR, &enable_reuse, sizeof(int)) == -1)
+    {
+        perror("UDP client socket broadcast enabling");
+        exit(EXIT_FAILURE);
+    }
+
     sock_in.sin_addr.s_addr = ip_addr.s_addr;
     sock_in.sin_port = htons(tcp_port);
     sock_in.sin_family = AF_INET;
