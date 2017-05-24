@@ -62,9 +62,14 @@ int main(int argc , char *argv[])
         perror("TCP server socket creation");
         exit(EXIT_FAILURE);
     }
-    sock_in.sin_port = tcp_port;
+    struct sockaddr_in dest;
+    dest.sin_addr = client_addr;
+    dest.sin_port = htons(tcp_port);
+    dest.sin_family = AF_INET;
 
-    if(connect(tcp_sock, (struct sockaddr *)&sock_in, sockaddr_len) < 0)
+    sleep(2);
+
+    if(connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr)) < 0)
     {
         printf("TCP server connect: Connection unsuccessful\n");
         exit(EXIT_FAILURE);
