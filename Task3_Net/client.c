@@ -112,6 +112,7 @@ int main(int argc , char *argv[])
 
     close(server_fd[0]);
     close(tcp_sock);
+    
     return 0;
 
 }
