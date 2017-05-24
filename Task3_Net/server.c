@@ -100,7 +100,7 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    /*double left, right;
+    double left, right;
     if(recv(tcp_sock, &left, sizeof(double), 0) < 0)
     {
         printf("TCP server recv: Unsuccessful\n");
@@ -111,19 +111,19 @@ int main(int argc , char *argv[])
     {
         printf("TCP server recv: Unsuccessful\n");
         exit(EXIT_FAILURE);
-    }*/
+    }
 
-    double left = 1;
-    double right = 2;
+    /*double left = 1;
+    double right = 2;*/
     double res = calculate_integral(threads_req, left, right);
     printf("res = %g\n", res);
-    /*if(send(tcp_sock, &res, sizeof(double), 0) < 0)
+    if(send(tcp_sock, &res, sizeof(double), 0) < 0)
     {
         printf("TCP server send: Unsuccessful\n");
         exit(EXIT_FAILURE);
     }
 
-    close(tcp_sock);*/
+    close(tcp_sock);
      
     return 0;
 }
