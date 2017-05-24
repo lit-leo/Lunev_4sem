@@ -152,7 +152,7 @@ int main(int argc , char *argv[])
         threads_total += server[i].threads_avail;
     }
 
-    /*distribution*/
+    //distribution
     double seg_size = (right - left) / threads_total;
     double current_left = left;
     for (int i = 0; i < servers_qty; ++i)
@@ -172,12 +172,32 @@ int main(int argc , char *argv[])
         printf("server[%d].right = %g", i, server[i].right);
     }
     #endif
-    /*results mining*/
+
+    //info sending
+    if(send(server[0].fd, &left, sizeof(double), 0) < 0)
+    {
+        printf("TCP client send: Unsuccessful\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if(send(server[0].fd, &right, sizeof(double), 0) < 0)
+    {
+        printf("TCP client send: Unsuccessful\n");
+        exit(EXIT_FAILURE);
+    }
+
+    //results mining
+    if(recv(server[0].fd, &(server[0].res), sizeof(double), 0) <= 0)
+    {
+        printf("TCP client recv: Recieve failed\n");
+        exit(EXIT_FAILURE);            
+    }
 
     for (int i = 0; i < servers_qty; ++i)
     {
         close(server[i].fd);
     }
+    printf("RESULT:: %g\n", server[0].res);
     close(tcp_sock);
 
     return 0;
