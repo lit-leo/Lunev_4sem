@@ -7,7 +7,7 @@ long pasreInput(int argc, char** argv)
 {
     if (argc != 2)
     {
-        printf("Usage: ./command <quantity_of_threads>\n");
+        printf("Usage: ./command <quantity_of_servers>\n");
         exit(-1);
     }
     
@@ -34,6 +34,7 @@ typedef struct server_fd
     int threads_avail;
     double left;
     double right;
+    double res;
 
 } server_struc_t;
 
@@ -42,6 +43,8 @@ int main(int argc , char *argv[])
     const unsigned udp_port = 8886;
     const unsigned tcp_port = 8888;
     const int servers_qty = (int)pasreInput(argc, argv);
+    const double left = 0;
+    const double right = 20;
     /*UDP - broadcast connection*/
     
     int udp_socket;
@@ -125,17 +128,22 @@ int main(int argc , char *argv[])
     listen(tcp_sock, servers_qty);
 
     server_struc_t server[servers_qty];
+    int max_fd = 0;
     int threads_total = 0;
     struct sockaddr_in server_sock;
     unsigned int sockaddr_len = sizeof(struct sockaddr);
     for (int i = 0; i < servers_qty; ++i)
     {
+        server[i].res = 0;
         server[i].fd = accept(tcp_sock, (struct sockaddr *)&server_sock, (socklen_t *)&sockaddr_len);
         if(server[i].fd < 0)
         {
             printf("TCP client accept: Connection failed\n");
             exit(EXIT_FAILURE);
         }
+        if(server[i].fd > max_fd)
+            max_fd = server[i].fd;
+
         if(recv(server[i].fd,&(server[i].threads_avail), sizeof(int), 0) <= 0)
         {
             printf("TCP client recv: Recieve failed\n");
@@ -143,6 +151,28 @@ int main(int argc , char *argv[])
         }
         threads_total += server[i].threads_avail;
     }
+
+    /*distribution*/
+    double seg_size = (right - left) / threads_total;
+    double current_left = left;
+    for (int i = 0; i < servers_qty; ++i)
+    {
+        server[i].left = current_left;
+        server[i].right = current_left + server[i].threads_avail * seg_size;
+        current_left = server[i].right;
+    }
+
+    #ifdef NET_DEBUG
+    printf("server struct info:\n");
+    for (int i = 0; i < servers_qty; ++i)
+    {
+        printf("server[%d].fd = %d", i, server[i].fd);
+        printf("server[%d].threads_avail = %d", i, server[i].threads_avail);
+        printf("server[%d].left = %g", i, server[i].left);
+        printf("server[%d].right = %g", i, server[i].right);
+    }
+    #endif
+    /*results mining*/
 
     for (int i = 0; i < servers_qty; ++i)
     {
