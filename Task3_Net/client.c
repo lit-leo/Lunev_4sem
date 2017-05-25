@@ -1,5 +1,5 @@
 #include "common.h"
-#define NET_DEBUG
+//#define NET_DEBUG
 //#define INET_LOOPBACK/**/
 #define EXIT_FAILURE 1
 
@@ -267,7 +267,7 @@ int main(int argc , char *argv[])
         printf("server[%d].limit.right = %g\n", i, server[i].limit.right);
     }
     #endif
-    fprintf(stderr, "All limits calculated. Starting transmission routine.\n");
+    fprintf(stderr, "All limits are calculated. Starting transmission routine...\n");
     //info exchange
     int sync;
     int finished = 0;

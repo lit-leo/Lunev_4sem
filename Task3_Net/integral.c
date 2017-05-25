@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #define f(x) x * x * x * 4 + x * x
 #define simps(a, b) ((b - a) / 6 * (f(a) + 4 * f((a + b) / 2) + f(b)))
-#define INTEGRAL_DBG
+//#define INTEGRAL_DBG
 
 typedef struct calc_structure
 {
