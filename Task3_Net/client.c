@@ -39,8 +39,6 @@ typedef struct server_fd
     int fd;
     int threads_avail;
     limits_t limit;
-    double res;
-
 } server_struc_t;
 
 int conn_acc = 0;
@@ -178,7 +176,7 @@ int main(int argc , char *argv[])
     int threads_total = 0;
     struct sockaddr_in server_sock;
     unsigned int sockaddr_len = sizeof(struct sockaddr);
-    //!!!!! RACE!! Possible sleep needed!
+    //!!!!! RACE!!
     alarm(3);
     for (int i = 0; i < servers_qty; ++i)
     {
@@ -191,7 +189,7 @@ int main(int argc , char *argv[])
         conn_acc++;
     }
     alarm(0);
-
+    
     for (int i = 0; i < servers_qty; ++i)
     {
         if(recv(server[i].fd, &(server[i].threads_avail), sizeof(int), 0) <= 0)
