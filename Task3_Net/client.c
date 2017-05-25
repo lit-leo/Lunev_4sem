@@ -153,7 +153,6 @@ int main(int argc , char *argv[])
     struct epoll_event events[64];
 
     server_struc_t server[servers_qty];
-    int max_fd = 0;
     int threads_total = 0;
     struct sockaddr_in server_sock;
     unsigned int sockaddr_len = sizeof(struct sockaddr);
@@ -161,17 +160,16 @@ int main(int argc , char *argv[])
     sleep(3);
     for (int i = 0; i < servers_qty; ++i)
     {
-        server[i].res = 0;
         server[i].fd = accept(tcp_sock, (struct sockaddr *)&server_sock, (socklen_t *)&sockaddr_len);
-        //sleep(5);
         if(server[i].fd < 0)
         {
             printf("TCP client accept: Connection failed\n");
             exit(EXIT_FAILURE);
         }
-        if(server[i].fd > max_fd)
-            max_fd = server[i].fd;
+    }
 
+    for (int i = 0; i < servers_qty; ++i)
+    {
         if(recv(server[i].fd, &(server[i].threads_avail), sizeof(int), 0) <= 0)
         {
             printf("TCP client recv: Recieve failed\n");
