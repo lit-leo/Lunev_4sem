@@ -38,7 +38,8 @@ long pasreInput(int argc, char** argv)
  
 int main(int argc , char *argv[])
 {
-    const unsigned port = 8888;
+    const unsigned udp_port = 8886;
+    const unsigned tcp_port = 8888;
     const int threads_req = (int)pasreInput(argc, argv);
 
     //UDP connection
@@ -49,13 +50,13 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    struct sockaddr_in sock_in;
-    sock_in.sin_addr.s_addr = INADDR_ANY;
-    sock_in.sin_port = htons(port);
-    sock_in.sin_family = AF_INET;
+    struct sockaddr_in udp_sock_in;
+    udp_sock_in.sin_addr.s_addr = INADDR_ANY;
+    udp_sock_in.sin_port = htons(udp_port);
+    udp_sock_in.sin_family = AF_INET;
 
     //bind udp socket
-    if(bind(udp_sock, (struct sockaddr *)&sock_in, sizeof(struct sockaddr)) == -1)
+    if(bind(udp_sock, (struct sockaddr *)&udp_sock_in, sizeof(struct sockaddr)) == -1)
     {
         perror("UDP server binding");
         exit(EXIT_FAILURE);
@@ -68,6 +69,11 @@ int main(int argc , char *argv[])
         perror("TCP server socket creation");
         exit(EXIT_FAILURE);
     }
+
+    //make tcp_sock NONBLOCK
+    int flags = fcntl(tcp_sock, F_GETFL);
+    flags |= O_NONBLOCK;
+    fcntl(tcp_sock, F_SETFL, flags);
 
     int keepalive = 1;
     int keepcnt = 1;
@@ -96,8 +102,8 @@ int main(int argc , char *argv[])
     }
 
     /* Server just keeps on running, recieving broadcast messages and
-     * trying to connect. Because of non-blocking mode, if connections fails
-     * server just waits for another broadcast message and connection possibility
+     * trying to connect. Due to non-blocking mode, if connections fails
+     * server just waits for another broadcast message and connection possibility.
      */
     while(1)
     {
@@ -106,7 +112,7 @@ int main(int argc , char *argv[])
         struct in_addr client_addr;
         memset(&client_addr, 0, sizeof(struct in_addr));
         if(recvfrom(udp_sock, &client_addr, sizeof(struct in_addr), 0, 
-            (struct sockaddr *)&sock_in, &sockaddr_len) == -1)
+            (struct sockaddr *)&udp_sock_in, &sockaddr_len) == -1)
         {
             perror("UDP server broadcast msg recv");
             exit(EXIT_FAILURE);
@@ -114,7 +120,7 @@ int main(int argc , char *argv[])
 
         #ifdef NET_DEBUG
         //display result
-        printf("recv = %s\n", inet_ntoa(((struct sockaddr_in *)&sock_in)->sin_addr));
+        printf("recv = %s\n", inet_ntoa(((struct sockaddr_in *)&udp_sock_in)->sin_addr));
         printf("content = %s\n", inet_ntoa(client_addr));
         #endif
         fprintf(stderr, "Broadcast message recieved.\n");
@@ -122,16 +128,13 @@ int main(int argc , char *argv[])
 
         struct sockaddr_in dest;
         dest.sin_addr = client_addr;
-        dest.sin_port = htons(port);
+        dest.sin_port = htons(tcp_port);
         dest.sin_family = AF_INET;
 
-        if(connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr)) < 0)
-        {
-            printf("TCP server connect: Connection unsuccessful.\n");
-            exit(EXIT_FAILURE);
-        }
+        if(connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr)) == 0)
+            break;
     }
-
+    fprintf(stderr, "Connection established.\n");
     if(send(tcp_sock, &threads_req, sizeof(int), 0) < 0)
     {
         printf("TCP server send: unsuccessful. Aborting...\n");
@@ -145,6 +148,7 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
+    fprintf(stderr, "Necessary data recieved. Starting caclulation routine...\n");
     double res = calculate_integral(threads_req, limit.left, limit.right);
     fprintf(stderr, "Calculated value: res = %g\n", res);
     if(send(tcp_sock, &res, sizeof(double), 0) < 0)

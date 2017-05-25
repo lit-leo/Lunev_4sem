@@ -64,7 +64,8 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    const unsigned port = 8888;
+    const unsigned udp_port = 8886;
+    const unsigned tcp_port = 8888;
     const int servers_qty = (int)pasreInput(argc, argv);
     conn_req = servers_qty;
     const double left = 0;
@@ -99,12 +100,11 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
-
     struct in_addr brd_addr = ((struct sockaddr_in *)&ifr_brd.ifr_addr)->sin_addr;
 
     struct sockaddr_in sock_in;
     sock_in.sin_addr.s_addr = ip_addr.s_addr;
-    sock_in.sin_port = htons(port);
+    sock_in.sin_port = htons(udp_port);
     sock_in.sin_family = AF_INET;
 
     //bind
@@ -122,7 +122,7 @@ int main(int argc , char *argv[])
     }
 
     sock_in.sin_addr.s_addr = brd_addr.s_addr;
-    sock_in.sin_port = htons(port);
+    sock_in.sin_port = htons(udp_port);
     sock_in.sin_family = AF_INET;
 
     if(sendto(udp_socket, &ip_addr, sizeof(struct in_addr), 0,
@@ -176,7 +176,7 @@ int main(int argc , char *argv[])
     }
 
     sock_in.sin_addr.s_addr = ip_addr.s_addr;
-    sock_in.sin_port = htons(port);
+    sock_in.sin_port = htons(tcp_port);
     sock_in.sin_family = AF_INET;
     if(bind(tcp_sock, (struct sockaddr*)&sock_in, sizeof(struct sockaddr)) == -1)
     {
