@@ -35,7 +35,13 @@ long pasreInput(int argc, char** argv)
 
     return threads_req;
 }
- 
+
+int conn_timed_out = 0;
+void alarm_checker(int signo)
+{
+    conn_timed_out = 1;
+}
+
 int main(int argc , char *argv[])
 {
     const unsigned udp_port = 8886;
@@ -69,12 +75,6 @@ int main(int argc , char *argv[])
         perror("TCP server socket creation");
         exit(EXIT_FAILURE);
     }
-
-    //make tcp_sock NONBLOCK
-    int flags = fcntl(tcp_sock, F_GETFL);
-    flags |= O_NONBLOCK;
-    fcntl(tcp_sock, F_SETFL, flags);
-
     int keepalive = 1;
     int keepcnt = 1;
     int keepidle = 1;
@@ -101,11 +101,20 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    /* Server just keeps on running, recieving broadcast messages and
-     * trying to connect. Due to non-blocking mode, if connections fails
-     * server just waits for another broadcast message and connection possibility.
+    //alarm handler
+    struct sigaction response;
+    memset(&response, 0, sizeof(response));
+    response.sa_handler = alarm_checker;
+    if(sigaction(SIGALRM, &response, NULL) == -1)
+    {
+        perror("Sigaction");
+        exit(EXIT_FAILURE);
+    }
+    /* After recieving broadcast msg, alarm is set to ensure that we will
+     * not block forever trying to connect to the client, who needn't new servers.
      */
-    while(1)
+    conn_timed_out = 0;
+    for(conn_timed_out = 0; conn_timed_out == 0; conn_timed_out = 0)
     {
         //recieve and process client adress through udp broadcast msg 
         unsigned int sockaddr_len = sizeof(struct sockaddr);
@@ -124,16 +133,21 @@ int main(int argc , char *argv[])
         printf("content = %s\n", inet_ntoa(client_addr));
         #endif
         fprintf(stderr, "Broadcast message recieved.\n");
-        close(udp_sock);
 
         struct sockaddr_in dest;
         dest.sin_addr = client_addr;
         dest.sin_port = htons(tcp_port);
         dest.sin_family = AF_INET;
 
-        if(connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr)) == 0)
-            break;
+        alarm(3);
+        if(connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr)) < 0)
+        {
+            printf("TCP server connect: Connection unsuccessful\n");
+            exit(EXIT_FAILURE);
+        }
+        alarm(0);
     }
+    close(udp_sock);
     fprintf(stderr, "Connection established.\n");
     if(send(tcp_sock, &threads_req, sizeof(int), 0) < 0)
     {
