@@ -84,6 +84,27 @@ int main(int argc , char *argv[])
         perror("TCP server socket creation");
         exit(EXIT_FAILURE);
     }
+
+    int keepcnt = 1;
+    int keepidle = 1;
+    int keepintvl = 1;
+
+    if (setsockopt (tcp_sock, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(int)) != 0)
+    {
+        perror("Unable to set parameters for socket:");
+        exit(EXIT_FAILURE);
+    }
+    if (setsockopt (tcp_sock, IPPROTO_TCP, TCP_KEEPIDLE, &keepidle, sizeof(int)) != 0)
+    {
+        perror("Unable to set parameters for socket:");
+        exit(EXIT_FAILURE);
+    }
+    if (setsockopt (tcp_sock, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(int)) != 0)
+    {
+        perror("Unable to set parameters for socket:");
+        exit(EXIT_FAILURE);
+    }
+
     struct sockaddr_in dest;
     dest.sin_addr = client_addr;
     #ifdef INET_LOOPBACK

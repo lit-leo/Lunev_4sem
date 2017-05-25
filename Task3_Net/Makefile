@@ -1,4 +1,4 @@
-CFLAGS = -Wall -g
+CFLAGS = -Wall -g -std=gnu99
 COMPILER = gcc
 
 SRC = server.c client.c

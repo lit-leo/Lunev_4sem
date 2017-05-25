@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <signal.h>
 
+#include <netinet/tcp.h>
 
 #include <sys/eventfd.h>
 #include <sys/epoll.h>

@@ -148,6 +148,33 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
+    int keepalive = 1;
+    int keepcnt = 1;
+    int keepidle = 1;
+    int keepintvl = 1;
+
+    if (setsockopt (tcp_sock, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(int)) != 0)
+    {
+        perror("Unable to set parameters for socket:");
+        exit(EXIT_FAILURE);
+    }
+
+    if (setsockopt (tcp_sock, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(int)) != 0)
+    {
+        perror("Unable to set parameters for socket:");
+        exit(EXIT_FAILURE);
+    }
+    if (setsockopt (tcp_sock, IPPROTO_TCP, TCP_KEEPIDLE, &keepidle, sizeof(int)) != 0)
+    {
+        perror("Unable to set parameters for socket:");
+        exit(EXIT_FAILURE);
+    }
+    if (setsockopt (tcp_sock, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(int)) != 0)
+    {
+        perror("Unable to set parameters for socket:");
+        exit(EXIT_FAILURE);
+    }
+
     sock_in.sin_addr.s_addr = ip_addr.s_addr;
     sock_in.sin_port = htons(tcp_port);
     sock_in.sin_family = AF_INET;
@@ -235,7 +262,6 @@ int main(int argc , char *argv[])
     }
     #endif
 
-    sleep(5);
     //info exchange
     int sync;
     int done = 0;
