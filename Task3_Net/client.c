@@ -163,7 +163,7 @@ int main(int argc , char *argv[])
     {
         server[i].res = 0;
         server[i].fd = accept(tcp_sock, (struct sockaddr *)&server_sock, (socklen_t *)&sockaddr_len);
-        sleep(5);
+        //sleep(5);
         if(server[i].fd < 0)
         {
             printf("TCP client accept: Connection failed\n");
@@ -179,14 +179,14 @@ int main(int argc , char *argv[])
         }
         threads_total += server[i].threads_avail;
 
-        //make socket nonblock
-        /*int flags = fcntl(tcp_sock, F_GETFL);
+        //make server[i].fd nonblock
+        int flags = fcntl(server[i].fd, F_GETFL);
         flags |= O_NONBLOCK;
-        fcntl(tcp_sock, F_SETFL, flags);*/
+        fcntl(server[i].fd, F_SETFL, flags);
 
         //epoll structure add
-        /*event.data.fd = server[i].fd; disabled for OBERTKA
-        event.events = EPOLLOUT;*/
+        event.data.ptr = &(server[i]);
+        event.events = EPOLLOUT;
         if(epoll_ctl(epollfd, EPOLL_CTL_ADD, server[i].fd, &event) == -1)
         {
             perror("epoll_ctl");
@@ -215,141 +215,82 @@ int main(int argc , char *argv[])
     }
     #endif
 
-    //info sending
-    int done;
-    for (int i = 0; i < servers_qty; ++i)
-    {
-        done = 0;
-        event.data.fd = server[i].fd;
-        event.events = EPOLLOUT;
-        if(epoll_ctl(epollfd, EPOLL_CTL_MOD, server[i].fd, &event) == -1)
-        {
-            perror("epoll_ctl");
-            exit(EXIT_FAILURE);
-        }
-        while(1)
-        {
-            int qty = epoll_wait(epollfd, events, 64, 10);
-            if(qty == -1)
-            {
-                perror("epoll_wait");
-                exit(EXIT_FAILURE);
-            }
-
-            for (int j = 0; j < qty; ++j)
-            {
-                if(events[j].events & EPOLLERR ||
-                   events[j].events & EPOLLHUP ||
-                   events[j].events & EPOLLRDHUP ||
-                   !(events[j].events & EPOLLOUT))
-                    //error occured
-                {
-                    printf("epoll socket problems\n");
-                    exit(EXIT_FAILURE);
-                }
-                else if(events[j].events & EPOLLOUT)
-                {
-                    if(send(events[j].data.fd, &(server[i].limit), sizeof(limits_t), 0) < 0)
-                    {
-                        printf("TCP client send: Unsuccessful\n");
-                        exit(EXIT_FAILURE);
-                    }
-                    done++;
-                    break;
-                }
-            }
-            if(done)
-                break;
-        }
-        if(epoll_ctl(epollfd, EPOLL_CTL_DEL, server[i].fd, &event) == -1)
-        {
-            perror("epoll_ctl");
-            exit(EXIT_FAILURE);
-        }
-        /*if(send(server[i].fd, &(server[i].left), sizeof(double), 0) < 0)
-        {
-            printf("TCP client send: Unsuccessful\n");
-            exit(EXIT_FAILURE);
-        }
-
-        if(send(server[i].fd, &(server[i].right), sizeof(double), 0) < 0)
-        {
-            printf("TCP client send: Unsuccessful\n");
-            exit(EXIT_FAILURE);
-        }*/
-    }
-    //sleep(20);
-    //results mining
-    
-    for (int i = 0; i < servers_qty; ++i)
-    {   
-        done = 0;
-        event.data.fd = server[i].fd;
-        event.events = EPOLLIN;
-        if(epoll_ctl(epollfd, EPOLL_CTL_ADD, server[i].fd, &event) == -1)
-        {
-            perror("epoll_ctl");
-            exit(EXIT_FAILURE);
-        }
-        while(1)
-        {
-            int qty = epoll_wait(epollfd, events, 64, 10000);
-            if(qty == -1)
-            {
-                perror("epoll_wait");
-                exit(EXIT_FAILURE);
-            }
-
-            for (int j = 0; j < qty; ++j)
-            {
-                if(events[j].events & EPOLLERR ||
-                    events[j].events & EPOLLHUP ||
-                    events[j].events & EPOLLRDHUP ||
-                    !(events[j].events & EPOLLIN))
-                    //error occured
-                {
-                    printf("epoll socket problems\n");
-                    exit(EXIT_FAILURE);
-                }
-                else if(events[j].events & EPOLLIN)
-                {
-                    if(recv(events[j].data.fd, &(server[i].res), sizeof(double), 0) <= 0)
-                    {
-                        printf("TCP client recv: Recieve failed\n");
-                        exit(EXIT_FAILURE);            
-                    }
-                    done++;
-                    break;
-                }
-            }
-            if(done)
-                break;
-        }
-    }
-    /*for (int i = 0; i < servers_qty; ++i)
-    {
-        if(recv(server[i].fd, &(server[i].res), sizeof(double), 0) <= 0)
-        {
-            printf("TCP client recv: Recieve failed\n");
-            exit(EXIT_FAILURE);            
-        }
-    }*/
-    //sleep(15);
+    sleep(5);
+    //info exchange
     int sync;
+    int done = 0;
+    double temp_res = 0;
     double res = 0;
-    for (int i = 0; i < servers_qty; ++i)
+    while(1)
     {
-        res += server[i].res;
-        if(send(server[i].fd, &sync, sizeof(int), 0) < 0)
+        int qty = epoll_wait(epollfd, events, 64, 10000);
+        if(qty == -1)
         {
-            printf("TCP client send: Unsuccessful\n");
+            perror("epoll_wait");
             exit(EXIT_FAILURE);
         }
-        close(server[i].fd);
+
+        for (int j = 0; j < qty; ++j)
+        {
+            if(events[j].events & EPOLLERR ||
+                events[j].events & EPOLLHUP ||
+                events[j].events & EPOLLRDHUP)
+                //error occured
+            {
+                printf("epoll socket problems\n");
+                exit(EXIT_FAILURE);
+            }
+            else if(events[j].events & EPOLLOUT)
+            {
+                int fd = ((server_struc_t *)events[j].data.ptr)->fd;
+                limits_t limits = ((server_struc_t *)events[j].data.ptr)->limit;
+                if(send(fd, &(limits), sizeof(limits_t), 0) < 0)
+                {
+                    printf("TCP client send: Unsuccessful\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                //change poll target to EPOLLIN
+                event.data.ptr = events[j].data.ptr;
+                event.events = EPOLLIN;
+                if(epoll_ctl(epollfd, EPOLL_CTL_MOD, fd, &event) == -1)
+                {
+                    perror("epoll_ctl");
+                    exit(EXIT_FAILURE);
+                }
+
+            }
+            else if(events[j].events & EPOLLIN)
+            {
+                int fd = ((server_struc_t *)events[j].data.ptr)->fd;
+                if(recv(fd, &(temp_res), sizeof(double), 0) <= 0)
+                {
+                    printf("TCP client recv: Recieve failed\n");
+                    exit(EXIT_FAILURE);            
+                }
+                res += temp_res;
+
+                if(send(fd, &sync, sizeof(int), 0) < 0)
+                {
+                    printf("TCP client send: Unsuccessful\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                //delete this instance from epoll
+                if(epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, &event) == -1)
+                {
+                    perror("epoll_ctl");
+                    exit(EXIT_FAILURE);
+                }
+                done++;
+            }
+        }
+        if(done == servers_qty)
+            break;
     }
+
     printf("RESULT:: %g\n", res);
     close(tcp_sock);
 
     return 0;
-
 }
