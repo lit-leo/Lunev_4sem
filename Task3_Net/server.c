@@ -1,6 +1,5 @@
 #include "common.h"
 #define NET_DEBUG
-//#define INET_LOOPBACK
 
 #define EXIT_FAILURE 1
 
@@ -39,8 +38,7 @@ long pasreInput(int argc, char** argv)
  
 int main(int argc , char *argv[])
 {
-    const unsigned udp_port = 8886;
-    const unsigned tcp_port = 8888;
+    const unsigned port = 8888;
     const int threads_req = (int)pasreInput(argc, argv);
 
     //UDP connection
@@ -53,30 +51,16 @@ int main(int argc , char *argv[])
 
     struct sockaddr_in sock_in;
     sock_in.sin_addr.s_addr = INADDR_ANY;
-    sock_in.sin_port = htons(udp_port);
-    sock_in.sin_family = AF_INET;/**/
+    sock_in.sin_port = htons(port);
+    sock_in.sin_family = AF_INET;
 
-    //bind
+    //bind udp socket
     if(bind(udp_sock, (struct sockaddr *)&sock_in, sizeof(struct sockaddr)) == -1)
     {
         perror("UDP server binding");
         exit(EXIT_FAILURE);
     }
 
-
-    unsigned int sockaddr_len = sizeof(struct sockaddr);
-    struct in_addr client_addr;
-    memset(&client_addr, 0, sizeof(struct in_addr));
-    recvfrom(udp_sock, &client_addr, sizeof(struct in_addr), 0, 
-        (struct sockaddr *)&sock_in, &sockaddr_len);
-
-    #ifdef NET_DEBUG
-    //display result
-    printf("recv = %s\n", inet_ntoa(((struct sockaddr_in *)&sock_in)->sin_addr));
-    printf("content = %s\n", inet_ntoa(client_addr));
-    #endif
-    close(udp_sock);
-    
     //tcp connections
     int tcp_sock = socket(AF_INET , SOCK_STREAM , 0);
     if(tcp_sock == -1)
@@ -85,10 +69,16 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
+    int keepalive = 1;
     int keepcnt = 1;
     int keepidle = 1;
     int keepintvl = 1;
 
+    if (setsockopt (tcp_sock, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(int)) != 0)
+    {
+        perror("Unable to set parameters for socket:");
+        exit(EXIT_FAILURE);
+    }
     if (setsockopt (tcp_sock, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(int)) != 0)
     {
         perror("Unable to set parameters for socket:");
@@ -105,48 +95,69 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    struct sockaddr_in dest;
-    dest.sin_addr = client_addr;
-    #ifdef INET_LOOPBACK
-    sock_in.sin_addr.s_addr = inet_addr("127.0.0.1");
-    #endif
-    dest.sin_port = htons(tcp_port);
-    dest.sin_family = AF_INET;
-
-    if(connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr)) < 0)
+    /* Server just keeps on running, recieving broadcast messages and
+     * trying to connect. Because of non-blocking mode, if connections fails
+     * server just waits for another broadcast message and connection possibility
+     */
+    while(1)
     {
-        printf("TCP server connect: Connection unsuccessful\n");
-        exit(EXIT_FAILURE);
+        //recieve and process client adress through udp broadcast msg 
+        unsigned int sockaddr_len = sizeof(struct sockaddr);
+        struct in_addr client_addr;
+        memset(&client_addr, 0, sizeof(struct in_addr));
+        if(recvfrom(udp_sock, &client_addr, sizeof(struct in_addr), 0, 
+            (struct sockaddr *)&sock_in, &sockaddr_len) == -1)
+        {
+            perror("UDP server broadcast msg recv");
+            exit(EXIT_FAILURE);
+        }
+
+        #ifdef NET_DEBUG
+        //display result
+        printf("recv = %s\n", inet_ntoa(((struct sockaddr_in *)&sock_in)->sin_addr));
+        printf("content = %s\n", inet_ntoa(client_addr));
+        #endif
+        fprintf(stderr, "Broadcast message recieved.\n");
+        close(udp_sock);
+
+        struct sockaddr_in dest;
+        dest.sin_addr = client_addr;
+        dest.sin_port = htons(port);
+        dest.sin_family = AF_INET;
+
+        if(connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr)) < 0)
+        {
+            printf("TCP server connect: Connection unsuccessful.\n");
+            exit(EXIT_FAILURE);
+        }
     }
 
     if(send(tcp_sock, &threads_req, sizeof(int), 0) < 0)
     {
-        printf("TCP server send: Unsuccessful\n");
+        printf("TCP server send: unsuccessful. Aborting...\n");
         exit(EXIT_FAILURE);
     }
 
     limits_t limit;
     if(recv(tcp_sock, &limit, sizeof(limits_t), 0) < 0)
     {
-        printf("TCP server recv: Unsuccessful\n");
+        printf("TCP server recv: unsuccessful. Aborting...\n");
         exit(EXIT_FAILURE);
     }
 
-    /*double left = 1;
-    double right = 2;*/
     double res = calculate_integral(threads_req, limit.left, limit.right);
-    printf("res = %g\n", res);
+    fprintf(stderr, "Calculated value: res = %g\n", res);
     if(send(tcp_sock, &res, sizeof(double), 0) < 0)
     {
-        printf("TCP server send: Unsuccessful\n");
+        printf("TCP server result send: unsuccessful. Aborting...\n");
         exit(EXIT_FAILURE);
     }
 
-    /*OBERTKA sync message*/
+    //sync message as an approval for ending
     int sync;
     if(recv(tcp_sock, &sync, sizeof(int), 0) < 0)
     {
-        printf("TCP server recv: Unsuccessful\n");
+        printf("TCP server sync recv: unsuccessful. Aborting...\n");
         exit(EXIT_FAILURE);
     }
 
