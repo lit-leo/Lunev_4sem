@@ -43,11 +43,33 @@ typedef struct server_fd
 
 } server_struc_t;
 
+int conn_acc = 0;
+int conn_req;
+void alarm_checker(int signo)
+{
+    if (conn_acc != conn_req)
+    {
+        printf("TCP client connection time exceede. Aborting...\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
 int main(int argc , char *argv[])
 {
+    //alarm handler
+    struct sigaction response;
+    memset(&response, 0, sizeof(response));
+    response.sa_handler = alarm_checker;
+    if(sigaction(SIGALRM, &response, NULL) == -1)
+    {
+        perror("Sigaction");
+        exit(EXIT_FAILURE);
+    }
+
     const unsigned udp_port = 8886;
     const unsigned tcp_port = 8888;
     const int servers_qty = (int)pasreInput(argc, argv);
+    conn_req = servers_qty;
     const double left = 0;
     const double right = 20;
     /*UDP - broadcast connection*/
@@ -137,9 +159,9 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
     //make socket nonblock
-    int flags = fcntl(tcp_sock, F_GETFL);
+    /*int flags = fcntl(tcp_sock, F_GETFL);
     flags |= O_NONBLOCK;
-    fcntl(tcp_sock, F_SETFL, flags);
+    fcntl(tcp_sock, F_SETFL, flags);*/
 
     listen(tcp_sock, servers_qty);
 
@@ -157,7 +179,7 @@ int main(int argc , char *argv[])
     struct sockaddr_in server_sock;
     unsigned int sockaddr_len = sizeof(struct sockaddr);
     //!!!!! RACE!! Possible sleep needed!
-    sleep(3);
+    alarm(3);
     for (int i = 0; i < servers_qty; ++i)
     {
         server[i].fd = accept(tcp_sock, (struct sockaddr *)&server_sock, (socklen_t *)&sockaddr_len);
@@ -166,7 +188,9 @@ int main(int argc , char *argv[])
             printf("TCP client accept: Connection failed\n");
             exit(EXIT_FAILURE);
         }
+        conn_acc++;
     }
+    alarm(0);
 
     for (int i = 0; i < servers_qty; ++i)
     {
