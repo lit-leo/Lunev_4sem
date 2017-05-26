@@ -61,7 +61,8 @@ int main(int argc , char *argv[])
         perror("UDP server binding");
         exit(EXIT_FAILURE);
     }
-
+while(1)
+{
     //tcp connections
     int tcp_sock = socket(AF_INET , SOCK_STREAM , 0);
     if(tcp_sock == -1)
@@ -95,8 +96,7 @@ int main(int argc , char *argv[])
         perror("Unable to set parameters for socket:");
         exit(EXIT_FAILURE);
     }
-while(1)
-{
+
     //recieve and process client adress through udp broadcast msg 
     unsigned int sockaddr_len = sizeof(struct sockaddr);
     struct in_addr client_addr;
@@ -159,11 +159,12 @@ while(1)
         printf("TCP server sync recv: unsuccessful. Aborting...\n");
         continue;//exit(EXIT_FAILURE);
     }
+    printf("BREAK\n");
     break;
+    close(tcp_sock);
 }
 
     close(udp_sock);
-    close(tcp_sock);
      
     return 0;
 }
