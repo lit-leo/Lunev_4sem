@@ -36,11 +36,6 @@ long pasreInput(int argc, char** argv)
     return threads_req;
 }
 
-/*void alarm_checker(int signo)
-{
-    conn_timed_out = 1;
-}*/
-
 int main(int argc , char *argv[])
 {
     const unsigned udp_port = 8886;
@@ -74,10 +69,6 @@ int main(int argc , char *argv[])
         perror("TCP server socket creation");
         exit(EXIT_FAILURE);
     }
-    //make tcp_sock nonblock
-    int flags = fcntl(tcp_sock, F_GETFL);
-    flags |= O_NONBLOCK;
-    fcntl(tcp_sock, F_SETFL, flags);
 
     int keepalive = 1;
     int keepcnt = 1;
@@ -105,31 +96,7 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    //alarm handler
-    /*struct sigaction response;
-    memset(&response, 0, sizeof(response));
-    response.sa_handler = alarm_checker;
-    if(sigaction(SIGALRM, &response, NULL) == -1)
-    {
-        perror("Sigaction");
-        exit(EXIT_FAILURE);
-    }*/
-    /* After recieving broadcast msg, alarm is set to ensure that we will
-     * not block forever trying to connect to the client, who needn't new servers.
-     * I am using epoll with time limit to ensure connect to succeed.
-     */
-    int epollfd = epoll_create1(0);
-    if(epollfd == -1)
-    {
-        perror("epoll");
-        exit(EXIT_FAILURE);
-    }
-    struct epoll_event event;
-    event.events = EPOLLOUT;
-    event.data.fd = tcp_sock;
-    struct epoll_event events[64];
-    int conn_success = 0;
-    do
+    while(1)
     {
         //recieve and process client adress through udp broadcast msg 
         unsigned int sockaddr_len = sizeof(struct sockaddr);
@@ -148,79 +115,18 @@ int main(int argc , char *argv[])
         printf("content = %s\n", inet_ntoa(client_addr));
         #endif
         fprintf(stderr, "Broadcast message recieved.\n");
-        //sleep(10);
 
         struct sockaddr_in dest;
         dest.sin_addr = client_addr;
         dest.sin_port = htons(tcp_port);
         dest.sin_family = AF_INET;
 
-        if(epoll_ctl(epollfd, EPOLL_CTL_ADD, tcp_sock, &event) == -1)
-        {
-            perror("epoll_ctl");
-            exit(EXIT_FAILURE);
-        }
-        sleep(1);
-        connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr));
-        if(errno == EINPROGRESS)
-        {
-            int qty = epoll_wait(epollfd, events, 64, 10000);
-            if(qty == -1)
-            {
-                perror("epoll_wait");
-                exit(EXIT_FAILURE);
-            }
-            for (int j = 0; j < qty; ++j)
-            {
-                if(events[j].events & EPOLLERR ||
-                    events[j].events & EPOLLHUP ||
-                    events[j].events & EPOLLRDHUP)
-                    //error occured
-                {
-                    printf("Socket problem registered by epoll. Aborting...\n");
-                    exit(EXIT_FAILURE);
-                }
-                else if(events[j].events & EPOLLOUT)
-                {
-                    int optval = 0;
-                    socklen_t optlen = 0;
-                    if (getsockopt(tcp_sock, SOL_SOCKET, SO_ERROR, &optval, &optlen) != 0)
-                    {
-                        perror("Unable to set parameters for socket:");
-                        exit(EXIT_FAILURE);
-                    }
-                    if(epoll_ctl(epollfd, EPOLL_CTL_DEL, tcp_sock, &event) == -1)
-                    {
-                        perror("epoll_ctl");
-                        exit(EXIT_FAILURE);
-                    }
-                    if(optval == 0)
-                        conn_success++;
-                }
-            }            
-        }
-        else
-        {
-            perror("TCP server connection");
-            fprintf(stderr, "Restarting...\nWaiting for another broadcast message\n");
-        }
-
-        /*if(connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr)) < 0)
-        {
-            printf("TCP server connect: Connection unsuccessful\n");
-            exit(EXIT_FAILURE);
-        }*/
+        if(connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr)) == 0)
+            break;
     }
-    while(!conn_success);
 
     close(udp_sock);
     fprintf(stderr, "Connection established.\n");
-
-    //MAKE tcp_sock BLOCK AGAIN!
-    flags = 0;
-    flags = fcntl(tcp_sock, F_GETFL);
-    flags &= ~O_NONBLOCK;
-    fcntl(tcp_sock, F_SETFL, flags);
 
     if(send(tcp_sock, &threads_req, sizeof(int), 0) < 0)
     {
