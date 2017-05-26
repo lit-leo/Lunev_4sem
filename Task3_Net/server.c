@@ -96,37 +96,38 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    while(1)
+    //recieve and process client adress through udp broadcast msg 
+    unsigned int sockaddr_len = sizeof(struct sockaddr);
+    struct in_addr client_addr;
+    memset(&client_addr, 0, sizeof(struct in_addr));
+    fprintf(stderr, "Awaiting new broadcast msg...\n");
+    if(recvfrom(udp_sock, &client_addr, sizeof(struct in_addr), 0, 
+        (struct sockaddr *)&udp_sock_in, &sockaddr_len) == -1)
     {
-        //recieve and process client adress through udp broadcast msg 
-        unsigned int sockaddr_len = sizeof(struct sockaddr);
-        struct in_addr client_addr;
-        memset(&client_addr, 0, sizeof(struct in_addr));
-        if(recvfrom(udp_sock, &client_addr, sizeof(struct in_addr), 0, 
-            (struct sockaddr *)&udp_sock_in, &sockaddr_len) == -1)
-        {
-            perror("UDP server broadcast msg recv");
-            exit(EXIT_FAILURE);
-        }
-
-        #ifdef NET_DEBUG
-        //display result
-        printf("recv = %s\n", inet_ntoa(((struct sockaddr_in *)&udp_sock_in)->sin_addr));
-        printf("content = %s\n", inet_ntoa(client_addr));
-        #endif
-        fprintf(stderr, "Broadcast message recieved.\n");
-
-        struct sockaddr_in dest;
-        dest.sin_addr = client_addr;
-        dest.sin_port = htons(tcp_port);
-        dest.sin_family = AF_INET;
-
-        if(connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr)) == 0)
-            break;
+        perror("UDP server broadcast msg recv");
+        exit(EXIT_FAILURE);
     }
 
-    close(udp_sock);
+    #ifdef NET_DEBUG
+    //display result
+    printf("recv = %s\n", inet_ntoa(((struct sockaddr_in *)&udp_sock_in)->sin_addr));
+    printf("content = %s\n", inet_ntoa(client_addr));
+    #endif
+    fprintf(stderr, "Broadcast message recieved.\n");
+
+    struct sockaddr_in dest;
+    dest.sin_addr = client_addr;
+    dest.sin_port = htons(tcp_port);
+    dest.sin_family = AF_INET;
+
+    if(connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr)) < 0)
+    {
+        perror("TCP server connection");
+        exit(EXIT_FAILURE);
+    }
+
     fprintf(stderr, "Connection established.\n");
+    close(udp_sock);
 
     if(send(tcp_sock, &threads_req, sizeof(int), 0) < 0)
     {
@@ -157,6 +158,7 @@ int main(int argc , char *argv[])
         printf("TCP server sync recv: unsuccessful. Aborting...\n");
         exit(EXIT_FAILURE);
     }
+
 
     close(tcp_sock);
      
