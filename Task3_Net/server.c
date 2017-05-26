@@ -148,6 +148,7 @@ int main(int argc , char *argv[])
         printf("content = %s\n", inet_ntoa(client_addr));
         #endif
         fprintf(stderr, "Broadcast message recieved.\n");
+        //sleep(10);
 
         struct sockaddr_in dest;
         dest.sin_addr = client_addr;
@@ -159,6 +160,7 @@ int main(int argc , char *argv[])
             perror("epoll_ctl");
             exit(EXIT_FAILURE);
         }
+        sleep(1);
         connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr));
         if(errno == EINPROGRESS)
         {
@@ -197,6 +199,11 @@ int main(int argc , char *argv[])
                 }
             }            
         }
+        else
+        {
+            perror("TCP server connection");
+            fprintf(stderr, "Restarting...\nWaiting for another broadcast message\n");
+        }
 
         /*if(connect(tcp_sock, (struct sockaddr *)&dest, sizeof(struct sockaddr)) < 0)
         {
@@ -209,7 +216,7 @@ int main(int argc , char *argv[])
     close(udp_sock);
     fprintf(stderr, "Connection established.\n");
 
-    //MAKE tcp_sock NONBLOCK AGAIN!
+    //MAKE tcp_sock BLOCK AGAIN!
     flags = 0;
     flags = fcntl(tcp_sock, F_GETFL);
     flags &= ~O_NONBLOCK;

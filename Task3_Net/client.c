@@ -54,28 +54,16 @@ void alarm_checker(int signo)
 
 int main(int argc , char *argv[])
 {
-    //alarm handler
-    struct sigaction response;
-    memset(&response, 0, sizeof(response));
-    response.sa_handler = alarm_checker;
-    if(sigaction(SIGALRM, &response, NULL) == -1)
-    {
-        perror("Sigaction");
-        exit(EXIT_FAILURE);
-    }
-
-    const unsigned udp_port = 8886;
-    const unsigned tcp_port = 8888;
     const int servers_qty = (int)pasreInput(argc, argv);
     conn_req = servers_qty;
     const double left = 0;
     const double right = 20;
     
-    //UDP - broadcast connection
-    int udp_socket;
-    if((udp_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
+    //initialize tcp_sock
+    int tcp_sock = socket(AF_INET , SOCK_STREAM, 0);
+    if(tcp_sock == -1)
     {
-        perror("UDP client socket creation");
+        perror("TCP client socket creation");
         exit(EXIT_FAILURE);
     }
 
@@ -83,64 +71,12 @@ int main(int argc , char *argv[])
     struct ifreq ifr_ip;
     ifr_ip.ifr_addr.sa_family = AF_INET;
     strncpy(ifr_ip.ifr_name, "wlp3s0", IFNAMSIZ-1);
-    if(ioctl(udp_socket, SIOCGIFADDR, &ifr_ip) == -1)
+    if(ioctl(tcp_sock, SIOCGIFADDR, &ifr_ip) == -1)
     {
         perror("Getting ip address");
         exit(EXIT_FAILURE);
     }
     struct in_addr ip_addr = ((struct sockaddr_in *)&ifr_ip.ifr_addr)->sin_addr;
-
-    //get broadcast address
-    struct ifreq ifr_brd;
-    ifr_brd.ifr_addr.sa_family = AF_INET;
-    strncpy(ifr_brd.ifr_name, "wlp3s0", IFNAMSIZ-1);
-    if(ioctl(udp_socket, SIOCGIFBRDADDR, &ifr_brd) == -1)
-    {
-        perror("Getting broadcast address:");
-        exit(EXIT_FAILURE);
-    }
-
-    struct in_addr brd_addr = ((struct sockaddr_in *)&ifr_brd.ifr_addr)->sin_addr;
-
-    struct sockaddr_in sock_in;
-    sock_in.sin_addr.s_addr = ip_addr.s_addr;
-    sock_in.sin_port = htons(udp_port);
-    sock_in.sin_family = AF_INET;
-
-    //bind
-    if(bind(udp_socket, (struct sockaddr*)&sock_in, sizeof(struct sockaddr)) == -1)
-    {
-        perror("UDP client socket binding");
-        exit(EXIT_FAILURE);
-    }
-
-    int enable_brd = 1;
-    if(setsockopt(udp_socket, SOL_SOCKET, SO_BROADCAST, &enable_brd, sizeof(int)) == -1)
-    {
-        perror("UDP client socket broadcast enabling");
-        exit(EXIT_FAILURE);
-    }
-
-    sock_in.sin_addr.s_addr = brd_addr.s_addr;
-    sock_in.sin_port = htons(udp_port);
-    sock_in.sin_family = AF_INET;
-
-    if(sendto(udp_socket, &ip_addr, sizeof(struct in_addr), 0,
-        (struct sockaddr *)&sock_in, sizeof(struct sockaddr_in)) == -1)
-    {
-        perror("Broadcast message sendto:");
-        exit(EXIT_FAILURE);
-    }
-    fprintf(stderr, "Broadcast message sent.\n");
-    close(udp_socket);
-
-    //tcp connection
-    int tcp_sock = socket(AF_INET , SOCK_STREAM, 0);
-    if(tcp_sock == -1)
-    {
-        perror("TCP client socket creation");
-        exit(EXIT_FAILURE);
-    }
 
     //set reuse and keep alive options
     int enable_reuse = 1;
@@ -175,16 +111,70 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    sock_in.sin_addr.s_addr = ip_addr.s_addr;
-    sock_in.sin_port = htons(tcp_port);
-    sock_in.sin_family = AF_INET;
-    if(bind(tcp_sock, (struct sockaddr*)&sock_in, sizeof(struct sockaddr)) == -1)
+    struct sockaddr_in tcp_sock_in;
+    tcp_sock_in.sin_addr.s_addr = ip_addr.s_addr;
+    const unsigned tcp_port = 8888;
+    tcp_sock_in.sin_port = htons(tcp_port);
+    tcp_sock_in.sin_family = AF_INET;
+    if(bind(tcp_sock, (struct sockaddr*)&tcp_sock_in, sizeof(struct sockaddr)) == -1)
     {
         perror("TCP client socket binding");
         exit(EXIT_FAILURE);
     }
-
     listen(tcp_sock, servers_qty);
+
+    //UDP - broadcast connection
+    int udp_sock;
+    if((udp_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
+    {
+        perror("UDP client socket creation");
+        exit(EXIT_FAILURE);
+    }
+
+    //get broadcast address
+    struct ifreq ifr_brd;
+    ifr_brd.ifr_addr.sa_family = AF_INET;
+    strncpy(ifr_brd.ifr_name, "wlp3s0", IFNAMSIZ-1);
+    if(ioctl(udp_sock, SIOCGIFBRDADDR, &ifr_brd) == -1)
+    {
+        perror("Getting broadcast address:");
+        exit(EXIT_FAILURE);
+    }
+
+    struct in_addr brd_addr = ((struct sockaddr_in *)&ifr_brd.ifr_addr)->sin_addr;
+
+    struct sockaddr_in udp_sock_in;
+    udp_sock_in.sin_addr.s_addr = ip_addr.s_addr;
+    const unsigned udp_port = 8886;
+    udp_sock_in.sin_port = htons(udp_port);
+    udp_sock_in.sin_family = AF_INET;
+
+    //bind udp_sock
+    if(bind(udp_sock, (struct sockaddr*)&udp_sock_in, sizeof(struct sockaddr)) == -1)
+    {
+        perror("UDP client socket binding");
+        exit(EXIT_FAILURE);
+    }
+
+    int enable_brd = 1;
+    if(setsockopt(udp_sock, SOL_SOCKET, SO_BROADCAST, &enable_brd, sizeof(int)) == -1)
+    {
+        perror("UDP client socket broadcast enabling");
+        exit(EXIT_FAILURE);
+    }
+
+    udp_sock_in.sin_addr.s_addr = brd_addr.s_addr;
+    udp_sock_in.sin_port = htons(udp_port);
+    udp_sock_in.sin_family = AF_INET;
+
+    if(sendto(udp_sock, &ip_addr, sizeof(struct in_addr), 0,
+        (struct sockaddr *)&udp_sock_in, sizeof(struct sockaddr_in)) == -1)
+    {
+        perror("Broadcast message sendto:");
+        exit(EXIT_FAILURE);
+    }
+    fprintf(stderr, "Broadcast message sent.\n");
+    close(udp_sock);
 
     int epollfd = epoll_create1(0);
     if(epollfd == -1)
@@ -206,9 +196,18 @@ int main(int argc , char *argv[])
      * when client waits infinitly for server connection
      * alarm is used. If by the time specified in 1st alarm (3 sec)
      * sufficient amount of peers was not achieved, than we perform exit.
-     * Logic can be seen in alarm_handler above
+     * Logic can be seen in alarm_checker above
      */
+    struct sigaction response;
+    memset(&response, 0, sizeof(response));
+    response.sa_handler = alarm_checker;
+    if(sigaction(SIGALRM, &response, NULL) == -1)
+    {
+        perror("Sigaction");
+        exit(EXIT_FAILURE);
+    }
     alarm(3);
+
     for (int i = 0; i < servers_qty; ++i)
     {
         server[i].fd = accept(tcp_sock, (struct sockaddr *)&server_sock, (socklen_t *)&sockaddr_len);
